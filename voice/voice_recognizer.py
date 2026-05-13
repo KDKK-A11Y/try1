@@ -3,7 +3,12 @@ import pyaudio
 import threading
 import numpy as np
 import time
+import base64
+import json
+import urllib
+import requests
 from PyQt5.QtCore import QObject, pyqtSignal
+from config.config import BAIDU_ASR_CONFIG
 
 class VoiceRecognizer(QObject):
     voice_detected = pyqtSignal(str)
@@ -12,7 +17,7 @@ class VoiceRecognizer(QObject):
     CHUNK = 1024
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
-    RATE = 44100
+    RATE = 16000
     SILENCE_THRESHOLD = 150
     MIN_AUDIO_DURATION = 0.3
     
@@ -21,25 +26,46 @@ class VoiceRecognizer(QObject):
         self.command_system = command_system
         self.logger = logger
         
-        self.r = sr.Recognizer()
-        self.r.energy_threshold = 150
-        self.r.dynamic_energy_threshold = False
-        self.r.pause_threshold = 0.5
-        self.r.phrase_threshold = 0.25
-        self.r.non_speaking_duration = 0.4
-        
         self._pyaudio_instance = None
         self._stream = None
         self._is_recording = False
         self._audio_frames = []
         self._recording_start_time = 0
         self._min_frames = 0
+        self._access_token = None
+        self._token_expire_time = 0
         
         try:
             self._pyaudio_instance = pyaudio.PyAudio()
             self.logger.info("麦克风初始化成功")
         except Exception as e:
             self.logger.error(f"麦克风初始化失败: {str(e)}")
+    
+    def _get_access_token(self):
+        now = time.time()
+        if self._access_token and now < self._token_expire_time:
+            return self._access_token
+        
+        api_key = BAIDU_ASR_CONFIG['API_KEY']
+        secret_key = BAIDU_ASR_CONFIG['SECRET_KEY']
+        
+        url = f"https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id={api_key}&client_secret={secret_key}"
+        
+        try:
+            response = requests.get(url)
+            result = response.json()
+            
+            if 'access_token' in result:
+                self._access_token = result['access_token']
+                self._token_expire_time = now + result.get('expires_in', 3600) - 60
+                self.logger.info(f"获取百度API Token成功，有效期: {result.get('expires_in', 3600)}秒")
+                return self._access_token
+            else:
+                self.logger.error(f"获取Token失败: {result.get('error_description', '未知错误')}")
+                return None
+        except Exception as e:
+            self.logger.error(f"获取Token异常: {str(e)}")
+            return None
     
     def _audio_callback(self, in_data, frame_count, time_info, status):
         if self._is_recording:
@@ -152,32 +178,56 @@ class VoiceRecognizer(QObject):
     
     def _process_audio(self, audio_data):
         try:
-            audio = sr.AudioData(audio_data, self.RATE, 2)
-            
             self.logger.info("正在识别，请稍候...")
             start_time = time.time()
             
-            text = self.r.recognize_google(audio, language='zh-CN')
-            recognize_time = time.time() - start_time
-            
-            if not text or len(text.strip()) == 0:
-                self.logger.warning("识别结果为空")
+            access_token = self._get_access_token()
+            if not access_token:
+                self.logger.error("无法获取百度API Token")
                 return
             
-            self.logger.info(f"识别成功! 耗时: {recognize_time:.2f}秒，识别结果: {text}")
-            self.voice_detected.emit(text)
+            speech_base64 = base64.b64encode(audio_data).decode("utf8")
+            speech_len = len(audio_data)
             
-            device, action = self.command_system.parse_command(text)
-            if device:
-                self.logger.info(f"执行命令: 设备={device}, 动作={action}")
-                self.command_system.execute_command(device, action)
-            else:
-                self.logger.warning(f"无法解析指令: {text}")
+            payload = json.dumps({
+                "format": "pcm",
+                "rate": self.RATE,
+                "channel": 1,
+                "cuid": BAIDU_ASR_CONFIG['CUID'],
+                "token": access_token,
+                "speech": speech_base64,
+                "len": speech_len
+            }, ensure_ascii=False)
+            
+            headers = {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+            
+            response = requests.post(BAIDU_ASR_CONFIG['URL'], headers=headers, data=payload.encode("utf-8"))
+            response.encoding = "utf-8"
+            result = response.json()
+            
+            recognize_time = time.time() - start_time
+            
+            if result.get('err_no') == 0:
+                text = result.get('result', [''])[0]
+                if not text or len(text.strip()) == 0:
+                    self.logger.warning("识别结果为空")
+                    return
                 
-        except sr.UnknownValueError:
-            self.logger.warning("无法识别语音内容，请说得更清晰一些")
-        except sr.RequestError as e:
-            self.logger.error(f"语音识别服务请求失败: {str(e)}")
+                self.logger.info(f"百度识别成功! 耗时: {recognize_time:.2f}秒，识别结果: {text}")
+                self.voice_detected.emit(text)
+                
+                device, action = self.command_system.parse_command(text)
+                if device:
+                    self.logger.info(f"执行命令: 设备={device}, 动作={action}")
+                    self.command_system.execute_command(device, action)
+                else:
+                    self.logger.warning(f"无法解析指令: {text}")
+            else:
+                self.logger.error(f"百度识别失败: err_no={result.get('err_no')}, err_msg={result.get('err_msg')}")
+                
         except Exception as e:
             self.logger.error(f"音频处理异常: {str(e)}")
     

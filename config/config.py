@@ -39,3 +39,11 @@ DEVICE_NAMES = {
 LOG_LEVEL = 'INFO'
 VOICE_TIMEOUT = 5
 GESTURE_FPS = 30
+
+BAIDU_ASR_CONFIG = {
+    'APP_ID': '28101621',
+    'API_KEY': 'Gl753XPEl0cbKkSROwLrvYow',
+    'SECRET_KEY': 'R6wipYNLt1p85GHLtT5pWMumwlU3wQzx',
+    'CUID': 'qfEfpDoItDEFJ5BSccixkL6bQZvJI6b9',
+    'URL': 'https://vop.baidu.com/server_api'
+}
