@@ -47,3 +47,10 @@ BAIDU_ASR_CONFIG = {
     'CUID': 'qfEfpDoItDEFJ5BSccixkL6bQZvJI6b9',
     'URL': 'https://vop.baidu.com/server_api'
 }
+
+LANGUAGE_MODELS = {
+    'mandarin': {'name': '普通话', 'dev_pid': 1537, 'description': '纯中文识别 - 语音近场识别模型'},
+    'english': {'name': '英语', 'dev_pid': 1737, 'description': '英语模型'},
+    'cantonese': {'name': '粤语', 'dev_pid': 1637, 'description': '粤语模型'},
+    'sichuan': {'name': '四川话', 'dev_pid': 1837, 'description': '四川话模型'}
+}

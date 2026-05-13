@@ -8,7 +8,7 @@ import json
 import urllib
 import requests
 from PyQt5.QtCore import QObject, pyqtSignal
-from config.config import BAIDU_ASR_CONFIG
+from config.config import BAIDU_ASR_CONFIG, LANGUAGE_MODELS
 
 class VoiceRecognizer(QObject):
     voice_detected = pyqtSignal(str)
@@ -34,12 +34,31 @@ class VoiceRecognizer(QObject):
         self._min_frames = 0
         self._access_token = None
         self._token_expire_time = 0
+        self._current_language = 'mandarin'
+        self._current_dev_pid = LANGUAGE_MODELS['mandarin']['dev_pid']
         
         try:
             self._pyaudio_instance = pyaudio.PyAudio()
             self.logger.info("麦克风初始化成功")
         except Exception as e:
             self.logger.error(f"麦克风初始化失败: {str(e)}")
+    
+    def get_language_list(self):
+        return LANGUAGE_MODELS
+    
+    def set_language(self, language_key):
+        if language_key in LANGUAGE_MODELS:
+            self._current_language = language_key
+            self._current_dev_pid = LANGUAGE_MODELS[language_key]['dev_pid']
+            lang_info = LANGUAGE_MODELS[language_key]
+            self.logger.info(f"语言切换成功: {lang_info['name']} (dev_pid: {self._current_dev_pid})")
+            return True
+        else:
+            self.logger.error(f"不支持的语言: {language_key}")
+            return False
+    
+    def get_current_language(self):
+        return self._current_language, LANGUAGE_MODELS[self._current_language]
     
     def _get_access_token(self):
         now = time.time()
@@ -196,7 +215,8 @@ class VoiceRecognizer(QObject):
                 "cuid": BAIDU_ASR_CONFIG['CUID'],
                 "token": access_token,
                 "speech": speech_base64,
-                "len": speech_len
+                "len": speech_len,
+                "dev_pid": self._current_dev_pid
             }, ensure_ascii=False)
             
             headers = {

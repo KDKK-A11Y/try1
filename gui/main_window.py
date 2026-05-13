@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QGridLayout, QLabel, QPushButton, QTextEdit,
-                             QGroupBox, QFrame, QProgressBar, QSizePolicy)
+                             QGroupBox, QFrame, QProgressBar, QSizePolicy, QComboBox)
 from PyQt5.QtGui import QFont, QLinearGradient, QRadialGradient, QPalette, QBrush, QPainter, QColor, QPen
 from PyQt5.QtCore import Qt, QTimer, pyqtSlot, QRect, QPointF
 from config.config import DEVICE_NAMES
@@ -575,6 +575,43 @@ class MainWindow(QMainWindow):
         
         control_layout.addLayout(status_layout)
         
+        lang_layout = QHBoxLayout()
+        lang_label = QLabel('🌐 语言选择:')
+        lang_label.setFont(QFont('微软雅黑', 12))
+        lang_label.setStyleSheet("color: #aaa;")
+        
+        self.lang_combo = QComboBox()
+        self.lang_combo.setFont(QFont('微软雅黑', 11))
+        self.lang_combo.setStyleSheet("""
+            QComboBox {
+                background: rgba(255,255,255,0.1);
+                color: white;
+                border: 1px solid rgba(255,255,255,0.2);
+                border-radius: 8px;
+                padding: 6px 12px;
+                min-width: 150px;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox QAbstractItemView {
+                background: #2a2a4a;
+                color: white;
+                border: 1px solid rgba(255,255,255,0.2);
+                border-radius: 8px;
+            }
+        """)
+        
+        if self.voice_recognizer:
+            languages = self.voice_recognizer.get_language_list()
+            for key, info in languages.items():
+                self.lang_combo.addItem(f"{info['name']} - {info['description']}", key)
+            self.lang_combo.currentIndexChanged.connect(self.on_language_changed)
+        
+        lang_layout.addWidget(lang_label)
+        lang_layout.addWidget(self.lang_combo)
+        control_layout.addLayout(lang_layout)
+        
         self.mic_btn = QPushButton('🎤 按住说话')
         self.mic_btn.setFixedHeight(50)
         self.mic_btn.setFont(QFont('微软雅黑', 12, QFont.Bold))
@@ -728,6 +765,14 @@ class MainWindow(QMainWindow):
                     box-shadow: 0 0 10px #00ff00;
                 }
             """)
+    
+    def on_language_changed(self, index):
+        if self.voice_recognizer and self.lang_combo:
+            lang_key = self.lang_combo.itemData(index)
+            if lang_key:
+                self.voice_recognizer.set_language(lang_key)
+                lang_info = self.voice_recognizer.get_current_language()[1]
+                self.log_text.append(f"<span style='color:#00aaff;'>🌐 [语言]</span> 已切换至: {lang_info['name']}")
     
     def on_reset(self):
         if self.sound_manager:
