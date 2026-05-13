@@ -365,6 +365,7 @@ class MainWindow(QMainWindow):
         if self.voice_recognizer:
             self.voice_recognizer.voice_detected.connect(self.on_voice_detected)
             self.voice_recognizer.recording_state_changed.connect(self.on_recording_state_changed)
+            self.voice_recognizer.assistant_response.connect(self.on_assistant_response)
         if self.gesture_recognizer:
             self.gesture_recognizer.gesture_detected.connect(self.on_gesture_detected)
         
@@ -773,6 +774,11 @@ class MainWindow(QMainWindow):
                 self.voice_recognizer.set_language(lang_key)
                 lang_info = self.voice_recognizer.get_current_language()[1]
                 self.log_text.append(f"<span style='color:#00aaff;'>🌐 [语言]</span> 已切换至: {lang_info['name']}")
+    
+    @pyqtSlot(list)
+    def on_assistant_response(self, responses):
+        for response in responses:
+            self.log_text.append(f"<span style='color:#ffaa00;'>🤖 [管家]</span> {response}")
     
     def on_reset(self):
         if self.sound_manager:

@@ -54,3 +54,44 @@ LANGUAGE_MODELS = {
     'cantonese': {'name': '粤语', 'dev_pid': 1637, 'description': '粤语模型'},
     'sichuan': {'name': '四川话', 'dev_pid': 1837, 'description': '四川话模型'}
 }
+
+ERNIE_SPEECH_CONFIG = {
+    'API_KEY': BAIDU_ASR_CONFIG['API_KEY'],
+    'SECRET_KEY': BAIDU_ASR_CONFIG['SECRET_KEY'],
+    'TOKEN_URL': 'https://aip.baidubce.com/oauth/2.0/token',
+    'ASR_URL': 'https://vop.baidu.com/server_api',
+    'NLP_URL': 'https://aip.baidubce.com/rpc/2.0/ai_custom/v1/solution/180561',
+    'TTS_URL': 'https://tsn.baidu.com/text2audio'
+}
+
+WEATHER_CONFIG = {
+    'API_KEY': BAIDU_ASR_CONFIG['API_KEY'],
+    'URL': 'https://api.map.baidu.com/weather/v1/',
+    'AK': BAIDU_ASR_CONFIG['API_KEY'],
+    'LOCATION': '北京'
+}
+
+WAKE_WORDS = ['小度小度', '管家管家', '智能管家', '你好管家']
+
+SCENE_RULES = {
+    'morning': {
+        'trigger': ['起床', '早上好', '早安'],
+        'suggestions': ['打开窗帘', '打开灯', '播放音乐'],
+        'time_range': '06:00-10:00'
+    },
+    'night': {
+        'trigger': ['睡觉', '晚安', '关灯睡觉'],
+        'suggestions': ['关闭灯', '关闭电视', '关闭风扇'],
+        'time_range': '21:00-06:00'
+    },
+    'cold': {
+        'trigger': ['冷', '太冷了', '有点凉'],
+        'suggestions': ['打开空调', '提高温度', '关闭窗户'],
+        'condition': {'temperature': {'lt': 20}}
+    },
+    'hot': {
+        'trigger': ['热', '太热了', '有点闷'],
+        'suggestions': ['打开空调', '降低温度', '打开风扇'],
+        'condition': {'temperature': {'gt': 28}}
+    }
+}

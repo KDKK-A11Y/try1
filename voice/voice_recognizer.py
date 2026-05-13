@@ -9,10 +9,12 @@ import urllib
 import requests
 from PyQt5.QtCore import QObject, pyqtSignal
 from config.config import BAIDU_ASR_CONFIG, LANGUAGE_MODELS
+from modules.smart_assistant import SmartAssistant
 
 class VoiceRecognizer(QObject):
     voice_detected = pyqtSignal(str)
     recording_state_changed = pyqtSignal(bool)
+    assistant_response = pyqtSignal(list)
     
     CHUNK = 1024
     FORMAT = pyaudio.paInt16
@@ -36,6 +38,8 @@ class VoiceRecognizer(QObject):
         self._token_expire_time = 0
         self._current_language = 'mandarin'
         self._current_dev_pid = LANGUAGE_MODELS['mandarin']['dev_pid']
+        
+        self.smart_assistant = SmartAssistant(logger)
         
         try:
             self._pyaudio_instance = pyaudio.PyAudio()
@@ -239,11 +243,17 @@ class VoiceRecognizer(QObject):
                 self.logger.info(f"百度识别成功! 耗时: {recognize_time:.2f}秒，识别结果: {text}")
                 self.voice_detected.emit(text)
                 
+                is_wake, command, responses = self.smart_assistant.process_text(text)
+                
+                if responses:
+                    self.assistant_response.emit(responses)
+                    self.logger.info(f"智能管家响应: {responses}")
+                
                 device, action = self.command_system.parse_command(text)
                 if device:
                     self.logger.info(f"执行命令: 设备={device}, 动作={action}")
                     self.command_system.execute_command(device, action)
-                else:
+                elif not is_wake and not responses:
                     self.logger.warning(f"无法解析指令: {text}")
             else:
                 self.logger.error(f"百度识别失败: err_no={result.get('err_no')}, err_msg={result.get('err_msg')}")
