@@ -27,24 +27,16 @@ def main():
     
     main_window = MainWindow(state_manager, command_system, voice_recognizer, gesture_recognizer, logger, sound_manager)
     
-    voice_thread = QThread()
-    voice_recognizer.moveToThread(voice_thread)
-    voice_thread.started.connect(voice_recognizer.start_listening)
-    
     gesture_thread = QThread()
     gesture_recognizer.moveToThread(gesture_thread)
     gesture_thread.started.connect(gesture_recognizer.start_recognizing)
     
-    voice_thread.start()
     gesture_thread.start()
     
     main_window.show()
     
     def cleanup():
-        voice_recognizer.stop_listening()
         gesture_recognizer.stop_recognizing()
-        voice_thread.quit()
-        voice_thread.wait()
         gesture_thread.quit()
         gesture_thread.wait()
     

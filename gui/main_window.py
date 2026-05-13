@@ -364,6 +364,7 @@ class MainWindow(QMainWindow):
         
         if self.voice_recognizer:
             self.voice_recognizer.voice_detected.connect(self.on_voice_detected)
+            self.voice_recognizer.recording_state_changed.connect(self.on_recording_state_changed)
         if self.gesture_recognizer:
             self.gesture_recognizer.gesture_detected.connect(self.on_gesture_detected)
         
@@ -574,6 +575,31 @@ class MainWindow(QMainWindow):
         
         control_layout.addLayout(status_layout)
         
+        self.mic_btn = QPushButton('🎤 按住说话')
+        self.mic_btn.setFixedHeight(50)
+        self.mic_btn.setFont(QFont('微软雅黑', 12, QFont.Bold))
+        self.mic_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4a90d9, stop:1 #357abd);
+                color: white;
+                border: none;
+                border-radius: 25px;
+                padding: 8px 20px;
+                box-shadow: 0 3px 10px rgba(53, 122, 189, 0.4);
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5a9fe9, stop:1 #4589cd);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #d94a4a, stop:1 #bd3535);
+                box-shadow: 0 0 20px rgba(217, 74, 74, 0.6);
+            }
+        """)
+        self.mic_btn.mousePressEvent = self.on_mic_press
+        self.mic_btn.mouseReleaseEvent = self.on_mic_release
+        self.mic_btn.setMouseTracking(True)
+        control_layout.addWidget(self.mic_btn)
+        
         reset_btn = QPushButton('🔄 重置所有设备')
         reset_btn.setFixedHeight(45)
         reset_btn.setFont(QFont('微软雅黑', 12, QFont.Bold))
@@ -597,7 +623,7 @@ class MainWindow(QMainWindow):
         
         control_layout.addWidget(reset_btn)
         
-        info_label = QLabel("💡 提示：使用手势或语音控制设备")
+        info_label = QLabel("💡 提示：按住麦克风按钮说话，松开自动识别")
         info_label.setFont(QFont('微软雅黑', 10))
         info_label.setStyleSheet("color: #888;")
         info_label.setAlignment(Qt.AlignCenter)
@@ -642,6 +668,67 @@ class MainWindow(QMainWindow):
     def update_log(self):
         pass
     
+    def on_mic_press(self, event):
+        if self.voice_recognizer:
+            import threading
+            self.record_thread = threading.Thread(target=self.voice_recognizer.start_recording)
+            self.record_thread.start()
+        QPushButton.mousePressEvent(self.mic_btn, event)
+    
+    def on_mic_release(self, event):
+        if self.voice_recognizer:
+            self.voice_recognizer.stop_recording()
+        QPushButton.mouseReleaseEvent(self.mic_btn, event)
+    
+    @pyqtSlot(bool)
+    def on_recording_state_changed(self, is_recording):
+        if is_recording:
+            self.mic_btn.setText('🎤 松开停止')
+            self.mic_btn.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #d94a4a, stop:1 #bd3535);
+                    color: white;
+                    border: none;
+                    border-radius: 25px;
+                    padding: 8px 20px;
+                    box-shadow: 0 0 25px rgba(217, 74, 74, 0.7);
+                }
+            """)
+            self.voice_indicator.setStyleSheet("""
+                QFrame {
+                    border-radius: 6px;
+                    background-color: #ff0000;
+                    box-shadow: 0 0 15px #ff0000;
+                }
+            """)
+            self.log_text.append("<span style='color:#ff0000;'>🎤 [录音]</span> 正在录音...")
+        else:
+            self.mic_btn.setText('🎤 按住说话')
+            self.mic_btn.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4a90d9, stop:1 #357abd);
+                    color: white;
+                    border: none;
+                    border-radius: 25px;
+                    padding: 8px 20px;
+                    box-shadow: 0 3px 10px rgba(53, 122, 189, 0.4);
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5a9fe9, stop:1 #4589cd);
+                }
+                QPushButton:pressed {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #d94a4a, stop:1 #bd3535);
+                    box-shadow: 0 0 20px rgba(217, 74, 74, 0.6);
+                }
+            """)
+            self.voice_indicator.setStyleSheet("""
+                QFrame {
+                    border-radius: 6px;
+                    background-color: #00ff00;
+                    box-shadow: 0 0 10px #00ff00;
+                }
+            """)
+    
     def on_reset(self):
         if self.sound_manager:
             self.sound_manager.play_success()
@@ -650,4 +737,6 @@ class MainWindow(QMainWindow):
     
     def closeEvent(self, event):
         self.log_timer.stop()
+        if self.voice_recognizer:
+            self.voice_recognizer.cleanup()
         event.accept()
