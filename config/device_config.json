@@ -34,6 +34,11 @@
       "name": "拉拉",
       "icon": "🏠",
       "color": "#666666"
+    },
+    "asd": {
+      "name": "asd",
+      "icon": "🏠",
+      "color": "#666666"
     }
   },
   "device_types": {
@@ -237,7 +242,8 @@
       "light",
       "water_heater",
       "humidifier",
-      "door_sensor"
+      "door_sensor",
+      "dehumidifier"
     ],
     "study": [
       "light",
@@ -250,10 +256,14 @@
       "smart_lock",
       "camera"
     ],
-    "拉拉": []
+    "拉拉": [],
+    "asd": [
+      "light"
+    ]
   },
   "custom_devices": {},
   "custom_rooms": {
-    "拉拉": true
+    "拉拉": true,
+    "asd": true
   }
 }

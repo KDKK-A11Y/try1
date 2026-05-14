@@ -290,17 +290,21 @@ class VoiceRecognizer(QObject):
                 self.voice_detected.emit(text)
                 
                 # 1. 先尝试执行直接设备命令
-                device, action = self.command_system.parse_command(text)
+                device, action, room_id = self.command_system.parse_command(text)
                 if device:
-                    self.logger.info(f"执行命令: 设备={device}, 动作={action}")
-                    self.command_system.execute_command(device, action)
+                    self.logger.info(f"执行命令: 设备={device}, 动作={action}, 房间={room_id}")
+                    success, response_msg = self.command_system.execute_command(device, action, room_id)
                     # 转换为中文回复
-                    from config.config import DEVICE_NAMES
-                    action_cn = "打开" if action == "on" else "关闭"
-                    device_cn = DEVICE_NAMES.get(device, device)
+                    from config.config import DEVICE_TYPES
+                    action_cn = self.command_system._get_action_text(action) if hasattr(self.command_system, '_get_action_text') else ("打开" if action == "on" else "关闭")
+                    device_info = DEVICE_TYPES.get(device, {})
+                    device_cn = device_info.get('name', device)
                     simple_response = f"好的，{action_cn}{device_cn}"
-                    self.assistant_response.emit([simple_response])
-                    self.smart_assistant.speak(simple_response)
+                    if success:
+                        self.assistant_response.emit([simple_response])
+                        self.smart_assistant.speak(simple_response)
+                    else:
+                        self.logger.warning(f"命令执行失败: {response_msg}")
                 else:
                     # 2. 尝试检测情绪并执行命令
                     emotion_response, emotion_commands = self.smart_assistant.detect_emotion(text)
