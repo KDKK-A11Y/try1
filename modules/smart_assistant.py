@@ -62,26 +62,29 @@ class SmartAssistant(QObject):
     
     def query_weather(self):
         try:
-            url = f"{WEATHER_CONFIG['URL']}?district_id=110100&data_type=all&ak={WEATHER_CONFIG['AK']}"
-            response = requests.get(url)
+            url = "https://wttr.in/Beijing?format=j1"
+            response = requests.get(url, timeout=10)
             result = response.json()
             
-            if result.get('status') == 0:
-                weather_data = result['result']
+            if 'current_condition' in result:
+                current = result['current_condition'][0]
+                tomorrow = result['weather'][0]['mintempC'] + '°C'
+                today_high = result['weather'][0]['maxtempC'] + '°C'
+                
                 self.current_weather = {
-                    'temperature': weather_data['now']['temp'],
-                    'weather': weather_data['now']['text'],
-                    'wind': weather_data['now']['wind_dir'],
-                    'humidity': weather_data['now']['humidity'],
-                    'today_high': weather_data['forecasts'][0]['high'],
-                    'today_low': weather_data['forecasts'][0]['low'],
-                    'city': weather_data['location']['city']
+                    'temperature': current['temp_C'],
+                    'weather': current['weatherDesc'][0]['value'],
+                    'wind': current['winddir16Point'] + ' ' + current['windspeedKmph'] + 'km/h',
+                    'humidity': current['humidity'],
+                    'today_high': today_high,
+                    'today_low': tomorrow,
+                    'city': '北京'
                 }
                 self.weather_updated.emit(self.current_weather)
                 self.logger.info(f"天气查询成功: {self.current_weather}")
                 return self.current_weather
             else:
-                self.logger.error(f"天气查询失败: {result.get('message', '未知错误')}")
+                self.logger.error(f"天气查询失败: {result}")
                 return None
         except Exception as e:
             self.logger.error(f"天气查询异常: {str(e)}")

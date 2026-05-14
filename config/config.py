@@ -80,9 +80,8 @@ PORCUPINE_CONFIG = {
 }
 
 WEATHER_CONFIG = {
-    'API_KEY': BAIDU_ASR_CONFIG['API_KEY'],
     'URL': 'https://api.map.baidu.com/weather/v1/',
-    'AK': BAIDU_ASR_CONFIG['API_KEY'],
+    'AK': 'K82Pmm3n1RQAaHEDyk2AVAt9MlfgrIFZ',
     'LOCATION': '北京'
 }
 
