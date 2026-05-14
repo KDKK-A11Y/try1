@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
 from PyQt5.QtGui import QFont, QLinearGradient, QRadialGradient, QPalette, QBrush, QPainter, QColor, QPen
 from PyQt5.QtCore import Qt, QTimer, pyqtSlot, QRect, QPointF
 from config.config import DEVICE_NAMES
+from voice.voiceprint_recognizer import VoiceprintRecognizer
 import os
 import pygame
 
@@ -360,6 +361,17 @@ class MainWindow(QMainWindow):
         self.logger = logger
         self.sound_manager = sound_manager
         
+        # 初始化声纹识别器
+        self.voiceprint_recognizer = VoiceprintRecognizer()
+        self.voiceprint_recognizer.load_voiceprints()
+        
+        # 连接声纹识别信号
+        self.voiceprint_recognizer.recording_started.connect(self.on_voiceprint_recording_started)
+        self.voiceprint_recognizer.recording_finished.connect(self.on_voiceprint_recording_finished)
+        self.voiceprint_recognizer.registration_finished.connect(self.on_voiceprint_registration_finished)
+        self.voiceprint_recognizer.recognition_finished.connect(self.on_voiceprint_recognition_finished)
+        self.voiceprint_recognizer.round_verified.connect(self.on_voiceprint_round_verified)
+        
         self.init_ui()
         
         self.state_manager.state_changed.connect(self.update_device_state)
@@ -427,31 +439,50 @@ class MainWindow(QMainWindow):
         self.weather_widget = QWidget()
         self.weather_widget.setStyleSheet("""
             QWidget {
-                background: rgba(0,150,255,0.1);
-                border-radius: 12px;
-                border: 1px solid rgba(0,150,255,0.3);
-                padding: 10px;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(64, 138, 236, 0.9),
+                    stop:1 rgba(112, 176, 244, 0.9));
+                border-radius: 18px;
+                border: 1px solid rgba(255,255,255,0.15);
+                padding: 15px 20px;
             }
         """)
         weather_layout = QHBoxLayout(self.weather_widget)
-        weather_layout.setSpacing(20)
+        weather_layout.setSpacing(25)
+        weather_layout.setContentsMargins(15, 15, 15, 15)
         
-        self.weather_icon_label = QLabel('☀️')
-        self.weather_icon_label.setFont(QFont('微软雅黑', 28))
+        # 天气图标
+        self.weather_icon_label = QLabel('🌞')
+        self.weather_icon_label.setFont(QFont('Segoe UI Symbol', 60))
         self.weather_icon_label.setAlignment(Qt.AlignCenter)
+        self.weather_icon_label.setStyleSheet("""
+            QLabel {
+                background: rgba(255,255,255,0.1);
+                border-radius: 20px;
+                padding: 10px;
+                min-width: 90px;
+                min-height: 90px;
+            }
+        """)
+        
+        info_container = QWidget()
+        info_layout = QVBoxLayout(info_container)
+        info_layout.setSpacing(5)
         
         self.weather_info_label = QLabel('正在获取天气...')
-        self.weather_info_label.setFont(QFont('微软雅黑', 12))
-        self.weather_info_label.setStyleSheet("color: #00aaff;")
+        self.weather_info_label.setFont(QFont('微软雅黑', 14))
+        self.weather_info_label.setStyleSheet("color: rgba(255,255,255,0.9);")
         
-        self.weather_temp_label = QLabel('--°C')
-        self.weather_temp_label.setFont(QFont('微软雅黑', 22, QFont.Bold))
-        self.weather_temp_label.setStyleSheet("color: #00ffff;")
+        self.weather_temp_label = QLabel('--°')
+        self.weather_temp_label.setFont(QFont('微软雅黑', 40, QFont.Bold))
+        self.weather_temp_label.setStyleSheet("color: #ffffff;")
+        
+        info_layout.addWidget(self.weather_info_label)
+        info_layout.addWidget(self.weather_temp_label)
         
         weather_layout.addWidget(self.weather_icon_label)
-        weather_layout.addWidget(self.weather_info_label)
+        weather_layout.addWidget(info_container)
         weather_layout.addStretch()
-        weather_layout.addWidget(self.weather_temp_label)
         
         left_layout.addWidget(self.weather_widget)
         
@@ -702,6 +733,74 @@ class MainWindow(QMainWindow):
         
         control_layout.addWidget(reset_btn)
         
+        # 声纹识别按钮
+        voiceprint_group = QGroupBox('🔊 声纹识别')
+        voiceprint_group.setStyleSheet("""
+            QGroupBox {
+                border: 2px solid rgba(100,150,255,0.3);
+                border-radius: 12px;
+                padding: 15px;
+                color: #6496ff;
+                font-size: 14px;
+                font-weight: bold;
+                background: rgba(100,150,255,0.03);
+                margin-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 0 10px 0 10px;
+            }
+        """)
+        voiceprint_layout = QVBoxLayout(voiceprint_group)
+        voiceprint_layout.setSpacing(12)
+        
+        self.register_voiceprint_btn = QPushButton('🎙️ 注册声纹')
+        self.register_voiceprint_btn.setFixedHeight(42)
+        self.register_voiceprint_btn.setFont(QFont('微软雅黑', 12, QFont.Bold))
+        self.register_voiceprint_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4a7cd9, stop:1 #356abd);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 20px;
+                box-shadow: 0 3px 10px rgba(53, 106, 189, 0.4);
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5a8ce9, stop:1 #4579cd);
+            }
+        """)
+        self.register_voiceprint_btn.clicked.connect(self.on_register_voiceprint)
+        
+        self.recognize_voiceprint_btn = QPushButton('👤 声纹识别')
+        self.recognize_voiceprint_btn.setFixedHeight(42)
+        self.recognize_voiceprint_btn.setFont(QFont('微软雅黑', 12, QFont.Bold))
+        self.recognize_voiceprint_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4ad9a0, stop:1 #35bd8a);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 20px;
+                box-shadow: 0 3px 10px rgba(53, 189, 138, 0.4);
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5ae9b0, stop:1 #45cd9a);
+            }
+        """)
+        self.recognize_voiceprint_btn.clicked.connect(self.on_recognize_voiceprint)
+        
+        self.voiceprint_status = QLabel('声纹识别状态: 未识别')
+        self.voiceprint_status.setFont(QFont('微软雅黑', 11))
+        self.voiceprint_status.setStyleSheet("color: #888;")
+        
+        voiceprint_layout.addWidget(self.register_voiceprint_btn)
+        voiceprint_layout.addWidget(self.recognize_voiceprint_btn)
+        voiceprint_layout.addWidget(self.voiceprint_status)
+        
+        control_layout.addWidget(voiceprint_group)
+        
         self.wake_btn = QPushButton('🔔 开启语音唤醒')
         self.wake_btn.setFixedHeight(45)
         self.wake_btn.setFont(QFont('微软雅黑', 12, QFont.Bold))
@@ -879,14 +978,35 @@ class MainWindow(QMainWindow):
             return
         
         if checked:
-            success = self.voice_recognizer.start_wake_listener()
-            if success:
-                self.wake_btn.setText('🔔 关闭语音唤醒')
-                self.log_text.append("<span style='color:#00ff00;'>🔔 [唤醒]</span> 语音唤醒已开启")
+            # 异步声纹验证
+            self.wake_btn.setEnabled(False)
+            self.log_text.append("<span style='color:#ff9900;'>🔊 [声纹]</span> 准备声纹验证...")
+            self._wake_request_pending = True
+            self.voiceprint_recognizer.recognize_async()
         else:
             self.voice_recognizer.stop_wake_listener()
             self.wake_btn.setText('🔔 开启语音唤醒')
             self.log_text.append("<span style='color:#ff6600;'>🔔 [唤醒]</span> 语音唤醒已关闭")
+    
+    def handle_wake_verification(self, success, user_id, score):
+        """处理唤醒的声纹验证结果"""
+        self._wake_request_pending = False
+        
+        if success and user_id == "master":
+            self.log_text.append(f"<span style='color:#4ad9a0;'>✅ [声纹]</span> 验证通过！相似度: {score:.2f}")
+            success = self.voice_recognizer.start_wake_listener()
+            if success:
+                self.wake_btn.setText('🔔 关闭语音唤醒')
+                self.log_text.append("<span style='color:#00ff00;'>🔔 [唤醒]</span> 语音唤醒已开启")
+                if self.sound_manager:
+                    self.sound_manager.play_device_on()
+        else:
+            self.log_text.append(f"<span style='color:#ff4a4a;'>❌ [声纹]</span> 验证失败，无法开启唤醒功能")
+            self.wake_btn.setChecked(False)
+            if self.sound_manager:
+                self.sound_manager.play_device_off()
+        
+        self.wake_btn.setEnabled(True)
     
     @pyqtSlot(str)
     def on_wake_word_detected(self, wake_word):
@@ -913,14 +1033,114 @@ class MainWindow(QMainWindow):
         self.weather_temp_label.setText(f"{temp}°C")
         
         weather_icons = {
-            'Sunny': '☀️', 'Clear': '🌙', 'Partly cloudy': '⛅', 'Cloudy': '☁️',
+            'Sunny': '🌞', 'Clear': '🌙', 'Partly cloudy': '⛅', 'Cloudy': '☁️',
             'Overcast': '☁️', 'Mist': '🌫️', 'Rain': '🌧️', 'Light rain': '🌦️',
-            'Heavy rain': '🌧️', 'Snow': '❄️', 'Fog': '🌫️', 'Thunder': '⛈️'
+            'Heavy rain': '⛈️', 'Snow': '❄️', 'Fog': '🌫️', 'Thunder': '🌩️',
+            'Drizzle': '🌧️', 'Showers': '🌦️', 'Snow showers': '🌨️', 'Hail': '🧊',
+            'Wind': '💨', 'Tornado': '🌪️', 'Hurricane': '🌀', 'Sleet': '🌨️'
         }
-        icon = weather_icons.get(weather, '☀️')
+        icon = weather_icons.get(weather, '🌞')
         self.weather_icon_label.setText(icon)
         
         self.log_text.append(f"<span style='color:#00aaff;'>🌤️ [天气]</span> {city} {weather} {temp}°C (最低{today_low}, 最高{today_high})")
+    
+    def on_register_voiceprint(self):
+        """注册声纹（异步）"""
+        self.log_text.append("<span style='color:#6496ff;'>🔊 [声纹]</span> 准备录制声纹...")
+        self.register_voiceprint_btn.setEnabled(False)
+        self.recognize_voiceprint_btn.setEnabled(False)
+        self.voiceprint_recognizer.register_voiceprint_async("master")
+    
+    def on_recognize_voiceprint(self):
+        """识别声纹（异步）"""
+        self.log_text.append("<span style='color:#6496ff;'>🔊 [声纹]</span> 准备进行声纹验证...")
+        self.register_voiceprint_btn.setEnabled(False)
+        self.recognize_voiceprint_btn.setEnabled(False)
+        self.voiceprint_recognizer.recognize_async()
+    
+    @pyqtSlot(int, int)
+    def on_voiceprint_recording_started(self, current_round, total_rounds):
+        """录音开始（支持多轮录制）"""
+        if total_rounds > 1:
+            status_text = f'声纹识别状态: 🎙️ 正在录音 ({current_round}/{total_rounds})'
+            log_text = f"<span style='color:#ff9900;'>🎙️ [声纹]</span> 第 {current_round}/{total_rounds} 次录音，请说'管家管家'..."
+        else:
+            status_text = '声纹识别状态: 🎙️ 正在录音...'
+            log_text = "<span style='color:#ff9900;'>🎙️ [声纹]</span> 正在录音，请说'管家管家'..."
+        
+        self.voiceprint_status.setText(status_text)
+        self.voiceprint_status.setStyleSheet("color: #ff9900;")
+        self.log_text.append(log_text)
+    
+    @pyqtSlot(int, int)
+    def on_voiceprint_recording_finished(self, current_round, total_rounds):
+        """录音结束"""
+        if total_rounds > 1 and current_round < total_rounds:
+            status_text = f'声纹识别状态: 准备第 {current_round + 1} 次录音...'
+            log_text = f"<span style='color:#6496ff;'>🔊 [声纹]</span> 第 {current_round} 次录音完成，准备下一次..."
+        else:
+            status_text = '声纹识别状态: 处理中...'
+            log_text = "<span style='color:#6496ff;'>🔊 [声纹]</span> 录音结束，正在处理..."
+        
+        self.voiceprint_status.setText(status_text)
+        self.log_text.append(log_text)
+    
+    @pyqtSlot(int, bool, str)
+    def on_voiceprint_round_verified(self, round_num, success, message):
+        """每轮录制验证结果"""
+        if success:
+            self.log_text.append(f"<span style='color:#4ad9a0;'>✅ [声纹]</span> 第 {round_num} 次录制成功！{message}")
+            if self.sound_manager:
+                self.sound_manager.play_device_on()
+        else:
+            self.log_text.append(f"<span style='color:#ff9900;'>⚠️ [声纹]</span> 第 {round_num} 次录制失败: {message}，请重试")
+            if self.sound_manager:
+                self.sound_manager.play_device_off()
+    
+    @pyqtSlot(bool, str)
+    def on_voiceprint_registration_finished(self, success, message):
+        """声纹注册完成"""
+        if success:
+            self.log_text.append(f"<span style='color:#4ad9a0;'>✅ [声纹]</span> {message}您现在是管理员")
+            self.voiceprint_status.setText('声纹识别状态: 已注册')
+            self.voiceprint_status.setStyleSheet("color: #4ad9a0;")
+            if self.sound_manager:
+                self.sound_manager.play_device_on()
+        else:
+            self.log_text.append(f"<span style='color:#ff4a4a;'>❌ [声纹]</span> {message}")
+            self.voiceprint_status.setText('声纹识别状态: 注册失败')
+            self.voiceprint_status.setStyleSheet("color: #ff4a4a;")
+            if self.sound_manager:
+                self.sound_manager.play_device_off()
+        self.register_voiceprint_btn.setEnabled(True)
+        self.recognize_voiceprint_btn.setEnabled(True)
+    
+    @pyqtSlot(bool, str, float)
+    def on_voiceprint_recognition_finished(self, success, user_id, score):
+        """声纹识别完成"""
+        # 检查是否是唤醒请求
+        if hasattr(self, '_wake_request_pending') and self._wake_request_pending:
+            self.handle_wake_verification(success, user_id, score)
+            return
+        
+        # 普通声纹识别请求
+        if success and user_id == "master":
+            self.log_text.append(f"<span style='color:#4ad9a0;'>✅ [声纹]</span> 验证通过！欢迎回来，相似度: {score:.2f}")
+            self.voiceprint_status.setText(f'声纹识别状态: 已验证 ({score:.2f})')
+            self.voiceprint_status.setStyleSheet("color: #4ad9a0;")
+            if self.sound_manager:
+                self.sound_manager.play_device_on()
+            # 唤醒语音助手
+            if self.voice_recognizer:
+                self.voice_recognizer.start_recording()
+        else:
+            self.log_text.append(f"<span style='color:#ff4a4a;'>❌ [声纹]</span> 验证失败，未知用户，相似度: {score:.2f}")
+            self.voiceprint_status.setText('声纹识别状态: 未通过')
+            self.voiceprint_status.setStyleSheet("color: #ff4a4a;")
+            if self.sound_manager:
+                self.sound_manager.play_device_off()
+        self.register_voiceprint_btn.setEnabled(True)
+        self.recognize_voiceprint_btn.setEnabled(True)
     
     def closeEvent(self, event):
         self.log_timer.stop()
