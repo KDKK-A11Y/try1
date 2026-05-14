@@ -27,13 +27,14 @@ class VoiceRecognizer(QObject):
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = 16000
-    SILENCE_THRESHOLD = 150
+    SILENCE_THRESHOLD = 80
     MIN_AUDIO_DURATION = 0.3
     
     WAKE_SAMPLING_RATE = 16000
     WAKE_CHUNK = 1024
-    WAKE_THRESHOLD = 200
-    WAKE_SEGMENT_FRAMES = 15
+    WAKE_THRESHOLD = 60
+    WAKE_SEGMENT_FRAMES = 12
+    WAKE_GAIN = 2.0
     
     def __init__(self, command_system, logger, sound_manager=None):
         super().__init__()
@@ -288,18 +289,53 @@ class VoiceRecognizer(QObject):
                 self.logger.info(f"百度识别成功! 耗时: {recognize_time:.2f}秒，识别结果: {text}")
                 self.voice_detected.emit(text)
                 
-                is_wake, command, responses = self.smart_assistant.process_text(text)
-                
-                if responses:
-                    self.assistant_response.emit(responses)
-                    self.logger.info(f"智能管家响应: {responses}")
-                
+                # 1. 先尝试执行直接设备命令
                 device, action = self.command_system.parse_command(text)
                 if device:
                     self.logger.info(f"执行命令: 设备={device}, 动作={action}")
                     self.command_system.execute_command(device, action)
-                elif not is_wake and not responses:
-                    self.logger.warning(f"无法解析指令: {text}")
+                    # 转换为中文回复
+                    from config.config import DEVICE_NAMES
+                    action_cn = "打开" if action == "on" else "关闭"
+                    device_cn = DEVICE_NAMES.get(device, device)
+                    simple_response = f"好的，{action_cn}{device_cn}"
+                    self.assistant_response.emit([simple_response])
+                    self.smart_assistant.speak(simple_response)
+                else:
+                    # 2. 尝试检测情绪并执行命令
+                    emotion_response, emotion_commands = self.smart_assistant.detect_emotion(text)
+                    if emotion_response:
+                        self.assistant_response.emit([emotion_response])
+                        self.logger.info(f"情绪响应: {emotion_response}")
+                        self.smart_assistant.speak(emotion_response)
+                        for device_name, action_name in emotion_commands:
+                            self.logger.info(f"执行情绪推测命令: {device_name} {action_name}")
+                            self.command_system.execute_command(device_name, action_name)
+                    
+                    # 3. 尝试检测场景并执行命令
+                    scene, scene_data = self.smart_assistant.detect_scene(text)
+                    if scene:
+                        self.assistant_response.emit([scene_data['greeting']])
+                        self.logger.info(f"场景响应: {scene_data['greeting']}")
+                        self.smart_assistant.speak(scene_data['greeting'])
+                        scene_commands = scene_data.get('commands', [])
+                        for device_name, action_name in scene_commands:
+                            self.logger.info(f"执行场景推测命令: {device_name} {action_name}")
+                            self.command_system.execute_command(device_name, action_name)
+                    
+                    # 4. 如果都没有，用智能管家或DeepSeek
+                    if not emotion_response and not scene:
+                        is_wake, command, responses = self.smart_assistant.process_text(text)
+                        if responses:
+                            self.assistant_response.emit(responses)
+                            self.logger.info(f"智能管家响应: {responses}")
+                            self.smart_assistant.speak(responses[0])
+                        else:
+                            self.logger.info(f"使用DeepSeek进行对话: {command}")
+                            deepseek_response = self.smart_assistant.chat_with_deepseek(command)
+                            if deepseek_response:
+                                self.assistant_response.emit([deepseek_response])
+                                self.logger.info(f"DeepSeek响应: {deepseek_response[:50]}...")
             else:
                 self.logger.error(f"百度识别失败: err_no={result.get('err_no')}, err_msg={result.get('err_msg')}")
                 
@@ -452,10 +488,13 @@ class VoiceRecognizer(QObject):
             return (in_data, pyaudio.paAbort)
         
         audio_np = np.frombuffer(in_data, dtype=np.int16)
+        
+        audio_np = np.clip(audio_np * self.WAKE_GAIN, -32768, 32767).astype(np.int16)
+        
         max_val = np.abs(audio_np).max()
         
         if max_val > self.WAKE_THRESHOLD:
-            self._wake_audio_buffer.append(in_data)
+            self._wake_audio_buffer.append(audio_np.tobytes())
             
             if len(self._wake_audio_buffer) >= self.WAKE_SEGMENT_FRAMES:
                 audio_data = b''.join(self._wake_audio_buffer)

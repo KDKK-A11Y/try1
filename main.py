@@ -1,5 +1,6 @@
 import sys
 import os
+import glob
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -14,7 +15,23 @@ from modules.logger import Logger
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import QThread
 
+def cleanup_temp_audio():
+    """清空temp_audio文件夹中的残留文件"""
+    audio_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'temp_audio')
+    if os.path.exists(audio_dir):
+        files = glob.glob(os.path.join(audio_dir, '*'))
+        for f in files:
+            try:
+                os.remove(f)
+                print(f"已清理临时音频文件: {f}")
+            except Exception as e:
+                print(f"清理文件失败 {f}: {str(e)}")
+    else:
+        os.makedirs(audio_dir)
+
 def main():
+    cleanup_temp_audio()
+    
     app = QApplication(sys.argv)
     
     logger = Logger()
@@ -24,6 +41,8 @@ def main():
     
     voice_recognizer = VoiceRecognizer(command_system, logger, sound_manager)
     gesture_recognizer = GestureRecognizer(command_system, logger)
+    
+    voice_recognizer.smart_assistant.enable_deepseek(True)
     
     main_window = MainWindow(state_manager, command_system, voice_recognizer, gesture_recognizer, logger, sound_manager)
     

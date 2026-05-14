@@ -6,7 +6,9 @@ import os
 import uuid
 import threading
 from datetime import datetime
-from config.config import ERNIE_SPEECH_CONFIG, WEATHER_CONFIG, WAKE_WORDS, SCENE_RULES, DEVICE_COMMANDS, BAIDU_ASR_CONFIG
+from config.config import ERNIE_SPEECH_CONFIG, WEATHER_CONFIG, WAKE_WORDS, SCENE_RULES, DEVICE_COMMANDS, BAIDU_ASR_CONFIG, DEEPSEEK_CONFIG
+from config.prompt_config import SYSTEM_PROMPT, INITIAL_QUESTIONS, SCENE_PROMPTS, EMOTION_RESPONSES, WEATHER_ACTIONS
+from modules.deepseek_client import DeepSeekClient
 from PyQt5.QtCore import QObject, pyqtSignal
 
 class SmartAssistant(QObject):
@@ -23,6 +25,10 @@ class SmartAssistant(QObject):
         self.current_weather = {}
         self.last_suggestions = []
         self.tts_enabled = True
+        
+        self._deepseek_client = None
+        self._use_deepseek = False
+        self._init_deepseek()
         
     def _get_access_token(self):
         now = time.time()
@@ -250,3 +256,66 @@ class SmartAssistant(QObject):
     
     def set_tts_enabled(self, enabled):
         self.tts_enabled = enabled
+    
+    def _init_deepseek(self):
+        """初始化DeepSeek客户端"""
+        try:
+            self._deepseek_client = DeepSeekClient(DEEPSEEK_CONFIG['API_KEY'])
+            self._deepseek_client.set_system_prompt(SYSTEM_PROMPT)
+            self._deepseek_client.response_received.connect(self._on_deepseek_response)
+            self._deepseek_client.error_occurred.connect(self._on_deepseek_error)
+            self.logger.info("DeepSeek客户端初始化成功")
+        except Exception as e:
+            self.logger.error(f"DeepSeek客户端初始化失败: {str(e)}")
+    
+    def get_initial_questions(self):
+        """获取初始化问题列表"""
+        return INITIAL_QUESTIONS
+    
+    def detect_emotion(self, text):
+        """检测用户情绪并返回(响应, 命令列表)"""
+        for emotion, data in EMOTION_RESPONSES.items():
+            for keyword in data['keywords']:
+                if keyword in text:
+                    self.logger.info(f"检测到情绪: {emotion}")
+                    return data['response'], data.get('commands', [])
+        return None, []
+    
+    def detect_scene(self, text):
+        """检测场景并返回(场景名, 场景数据)"""
+        for scene, data in SCENE_PROMPTS.items():
+            for trigger in data['trigger']:
+                if trigger in text:
+                    self.logger.info(f"检测到场景: {scene}")
+                    return scene, data
+        return None, None
+    
+    def enable_deepseek(self, enable=True):
+        """启用/禁用DeepSeek"""
+        self._use_deepseek = enable
+        if enable:
+            if not self._deepseek_client:
+                self._init_deepseek()
+            self.logger.info("已启用DeepSeek对话")
+        else:
+            self.logger.info("已禁用DeepSeek对话")
+    
+    def chat_with_deepseek(self, message):
+        """与DeepSeek对话"""
+        if not self._use_deepseek or not self._deepseek_client:
+            self.logger.warning("DeepSeek未启用或未初始化")
+            return None
+        
+        self.logger.info(f"正在与DeepSeek对话: {message}")
+        return self._deepseek_client.chat(message)
+    
+    def _on_deepseek_response(self, response):
+        """DeepSeek响应回调"""
+        self.logger.info(f"DeepSeek响应: {response[:50]}...")
+        
+        if self.tts_enabled:
+            self.speak(response)
+    
+    def _on_deepseek_error(self, error_msg):
+        """DeepSeek错误回调"""
+        self.logger.error(f"DeepSeek错误: {error_msg}")

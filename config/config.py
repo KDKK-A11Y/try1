@@ -109,3 +109,9 @@ SCENE_RULES = {
         'condition': {'temperature': {'gt': 28}}
     }
 }
+
+DEEPSEEK_CONFIG = {
+    'API_KEY': 'sk-2a6c01cbefab4dd2af34c35336fb74c9',
+    'MODEL': 'deepseek-v4-pro',
+    'SYSTEM_PROMPT': '你是一个智能管家助手，精通中文，善于理解用户意图并提供友好、专业的回答。'
+}
