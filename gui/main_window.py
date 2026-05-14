@@ -1,9 +1,11 @@
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QGridLayout, QLabel, QPushButton, QTextEdit,
-                             QGroupBox, QFrame, QProgressBar, QSizePolicy, QComboBox)
+                             QGroupBox, QFrame, QProgressBar, QSizePolicy, QComboBox,
+                             QInputDialog, QLineEdit, QScrollArea)
 from PyQt5.QtGui import QFont, QLinearGradient, QRadialGradient, QPalette, QBrush, QPainter, QColor, QPen
 from PyQt5.QtCore import Qt, QTimer, pyqtSlot, QRect, QPointF
-from config.config import DEVICE_NAMES
+from config.config import DEVICE_NAMES, ROOMS, DEVICE_TYPES, DEFAULT_ROOM_DEVICES
+from modules.device_manager import DeviceManager
 from voice.voiceprint_recognizer import VoiceprintRecognizer
 import os
 import pygame
@@ -361,6 +363,12 @@ class MainWindow(QMainWindow):
         self.logger = logger
         self.sound_manager = sound_manager
         
+        # 初始化设备管理器
+        self.device_manager = DeviceManager()
+        
+        # 当前选中的房间
+        self.current_room = 'living'
+        
         # 初始化声纹识别器
         self.voiceprint_recognizer = VoiceprintRecognizer()
         self.voiceprint_recognizer.load_voiceprints()
@@ -486,6 +494,77 @@ class MainWindow(QMainWindow):
         
         left_layout.addWidget(self.weather_widget)
         
+        # 房间选择组件
+        room_group = QGroupBox('🏠 房间选择')
+        room_group.setStyleSheet("""
+            QGroupBox {
+                border: 2px solid rgba(100,150,255,0.2);
+                border-radius: 12px;
+                padding: 15px;
+                color: #6496ff;
+                font-size: 14px;
+                font-weight: bold;
+                background: rgba(100,150,255,0.02);
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 0 10px 0 10px;
+            }
+        """)
+        room_layout = QHBoxLayout(room_group)
+        room_layout.setSpacing(10)
+        
+        self.room_buttons = {}
+        for room_id, room_info in ROOMS.items():
+            btn = QPushButton(f"{room_info['icon']} {room_info['name']}")
+            btn.setFont(QFont('微软雅黑', 11))
+            btn.setFixedHeight(38)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: rgba(255,255,255,0.05);
+                    color: #aaa;
+                    border: 1px solid rgba(255,255,255,0.1);
+                    border-radius: 8px;
+                    padding: 6px 12px;
+                }}
+                QPushButton:hover {{
+                    background: rgba(100,150,255,0.2);
+                    color: #6496ff;
+                }}
+                QPushButton:checked {{
+                    background: {room_info['color']};
+                    color: white;
+                    border-color: {room_info['color']};
+                }}
+            """)
+            btn.setCheckable(True)
+            btn.setChecked(room_id == self.current_room)
+            btn.clicked.connect(lambda checked, rid=room_id: self.on_room_selected(rid))
+            self.room_buttons[room_id] = btn
+            room_layout.addWidget(btn)
+        
+        add_room_btn = QPushButton('+ 添加房间')
+        add_room_btn.setFont(QFont('微软雅黑', 11))
+        add_room_btn.setFixedHeight(38)
+        add_room_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(74,217,160,0.2);
+                color: #4ad9a0;
+                border: 1px solid rgba(74,217,160,0.4);
+                border-radius: 8px;
+                padding: 6px 12px;
+            }
+            QPushButton:hover {
+                background: rgba(74,217,160,0.3);
+            }
+        """)
+        add_room_btn.clicked.connect(self.on_add_room)
+        room_layout.addWidget(add_room_btn)
+        room_layout.addStretch()
+        
+        left_layout.addWidget(room_group)
+        
         device_group = QGroupBox('设备控制中心')
         device_group.setStyleSheet("""
             QGroupBox {
@@ -505,20 +584,56 @@ class MainWindow(QMainWindow):
         """)
         device_layout = QVBoxLayout(device_group)
         
-        self.device_grid = QGridLayout()
+        # 设备网格容器（可滚动）
+        self.device_grid_container = QWidget()
+        self.device_grid = QGridLayout(self.device_grid_container)
         self.device_grid.setSpacing(25)
+        self.device_grid.setContentsMargins(0, 0, 0, 0)
+        
         self.device_widgets = {}
         
-        devices = list(DEVICE_NAMES.items())
-        for i, (device_id, device_name) in enumerate(devices):
-            widget = DeviceWidget(device_id, device_name, self.sound_manager)
-            widget.toggle_btn.clicked.connect(lambda checked, did=device_id: self.on_device_toggle(did))
-            self.device_widgets[device_id] = widget
-            row = i // 3
-            col = i % 3
-            self.device_grid.addWidget(widget, row, col)
+        # 初始加载当前房间的设备
+        self.load_room_devices(self.current_room)
         
-        device_layout.addLayout(self.device_grid)
+        scroll_area = QScrollArea()
+        scroll_area.setWidget(self.device_grid_container)
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
+            QScrollBar:vertical {
+                background: rgba(255,255,255,0.05);
+                width: 8px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(0,255,0,0.3);
+                border-radius: 4px;
+            }
+        """)
+        
+        # 添加设备按钮
+        add_device_btn = QPushButton('+ 添加设备到房间')
+        add_device_btn.setFont(QFont('微软雅黑', 11))
+        add_device_btn.setFixedHeight(35)
+        add_device_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(74,144,217,0.2);
+                color: #4a90d9;
+                border: 1px solid rgba(74,144,217,0.4);
+                border-radius: 8px;
+                padding: 6px 12px;
+            }
+            QPushButton:hover {
+                background: rgba(74,144,217,0.3);
+            }
+        """)
+        add_device_btn.clicked.connect(self.on_add_device)
+        
+        device_layout.addWidget(add_device_btn)
+        device_layout.addWidget(scroll_area)
         left_layout.addWidget(device_group)
         
         self.status_bar = QProgressBar()
@@ -1147,3 +1262,155 @@ class MainWindow(QMainWindow):
         if self.voice_recognizer:
             self.voice_recognizer.cleanup()
         event.accept()
+    
+    def load_room_devices(self, room_id):
+        """加载指定房间的设备"""
+        # 清空现有设备
+        for device_id in list(self.device_widgets.keys()):
+            widget = self.device_widgets.pop(device_id)
+            widget.deleteLater()
+        
+        # 清空网格布局
+        while self.device_grid.count():
+            child = self.device_grid.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        # 获取房间设备
+        room_devices = DEFAULT_ROOM_DEVICES.get(room_id, [])
+        room_name = ROOMS.get(room_id, {}).get('name', room_id)
+        
+        # 添加设备到网格
+        for i, device_type in enumerate(room_devices):
+            device_key = f"{room_id}_{device_type}"
+            device_name = f"{room_name}{DEVICE_TYPES[device_type]['name']}"
+            
+            widget = DeviceWidget(device_type, device_name, self.sound_manager)
+            widget.toggle_btn.clicked.connect(lambda checked, did=device_key: self.on_device_toggle(did))
+            self.device_widgets[device_key] = widget
+            
+            # 恢复设备状态
+            state = self.state_manager.get_state(device_key)
+            widget.set_state(state)
+            
+            row = i // 3
+            col = i % 3
+            self.device_grid.addWidget(widget, row, col)
+        
+        if not room_devices:
+            empty_label = QLabel(f"{room_name}暂无设备")
+            empty_label.setFont(QFont('微软雅黑', 14))
+            empty_label.setStyleSheet("color: #666;")
+            empty_label.setAlignment(Qt.AlignCenter)
+            self.device_grid.addWidget(empty_label, 0, 0)
+        
+        self.log_text.append(f"<span style='color:#6496ff;'>🏠 [房间]</span> 已切换到{room_name}")
+    
+    def on_room_selected(self, room_id):
+        """房间选择处理"""
+        # 更新选中状态
+        for rid, btn in self.room_buttons.items():
+            btn.setChecked(rid == room_id)
+        
+        self.current_room = room_id
+        self.load_room_devices(room_id)
+    
+    def on_add_room(self):
+        """添加自定义房间"""
+        room_name, ok = QInputDialog.getText(self, '添加房间', '请输入房间名称:', QLineEdit.Normal, '')
+        if ok and room_name.strip():
+            room_id = room_name.strip().lower().replace(' ', '_')
+            success, message = self.device_manager.add_custom_room(room_id, room_name.strip())
+            
+            if success:
+                self.log_text.append(f"<span style='color:#4ad9a0;'>✅ [房间]</span> {message}")
+                if self.sound_manager:
+                    self.sound_manager.play_device_on()
+                # 更新房间按钮
+                self.update_room_buttons()
+            else:
+                self.log_text.append(f"<span style='color:#ff4a4a;'>❌ [房间]</span> {message}")
+                if self.sound_manager:
+                    self.sound_manager.play_device_off()
+    
+    def update_room_buttons(self):
+        """更新房间按钮列表"""
+        # 清空现有按钮
+        while self.room_layout.count():
+            child = self.room_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        # 重新添加所有房间按钮
+        self.room_buttons = {}
+        for room_id, room_info in self.device_manager.get_all_rooms().items():
+            btn = QPushButton(f"{room_info['icon']} {room_info['name']}")
+            btn.setFont(QFont('微软雅黑', 11))
+            btn.setFixedHeight(38)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: rgba(255,255,255,0.05);
+                    color: #aaa;
+                    border: 1px solid rgba(255,255,255,0.1);
+                    border-radius: 8px;
+                    padding: 6px 12px;
+                }}
+                QPushButton:hover {{
+                    background: rgba(100,150,255,0.2);
+                    color: #6496ff;
+                }}
+                QPushButton:checked {{
+                    background: {room_info['color']};
+                    color: white;
+                    border-color: {room_info['color']};
+                }}
+            """)
+            btn.setCheckable(True)
+            btn.setChecked(room_id == self.current_room)
+            btn.clicked.connect(lambda checked, rid=room_id: self.on_room_selected(rid))
+            self.room_buttons[room_id] = btn
+            self.room_layout.addWidget(btn)
+        
+        add_room_btn = QPushButton('+ 添加房间')
+        add_room_btn.setFont(QFont('微软雅黑', 11))
+        add_room_btn.setFixedHeight(38)
+        add_room_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(74,217,160,0.2);
+                color: #4ad9a0;
+                border: 1px solid rgba(74,217,160,0.4);
+                border-radius: 8px;
+                padding: 6px 12px;
+            }
+            QPushButton:hover {
+                background: rgba(74,217,160,0.3);
+            }
+        """)
+        add_room_btn.clicked.connect(self.on_add_room)
+        self.room_layout.addWidget(add_room_btn)
+        self.room_layout.addStretch()
+    
+    def on_add_device(self):
+        """向当前房间添加设备"""
+        device_types = list(DEVICE_TYPES.keys())
+        device_names = [f"{DEVICE_TYPES[d]['icon']} {DEVICE_TYPES[d]['name']}" for d in device_types]
+        
+        device_name, ok = QInputDialog.getItem(self, '添加设备', '选择设备类型:', device_names, 0, False)
+        
+        if ok and device_name:
+            # 提取设备类型ID
+            for device_id, info in DEVICE_TYPES.items():
+                if f"{info['icon']} {info['name']}" == device_name:
+                    success, message = self.device_manager.add_device_to_room(self.current_room, device_id)
+                    
+                    if success:
+                        self.log_text.append(f"<span style='color:#4ad9a0;'>✅ [设备]</span> {message}")
+                        if self.sound_manager:
+                            self.sound_manager.play_device_on()
+                        # 刷新设备列表
+                        self.load_room_devices(self.current_room)
+                    else:
+                        self.log_text.append(f"<span style='color:#ff4a4a;'>❌ [设备]</span> {message}")
+                        if self.sound_manager:
+                            self.sound_manager.play_device_off()
+                    break
