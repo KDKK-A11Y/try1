@@ -35,10 +35,11 @@ class VoiceRecognizer(QObject):
     WAKE_THRESHOLD = 200
     WAKE_SEGMENT_FRAMES = 15
     
-    def __init__(self, command_system, logger):
+    def __init__(self, command_system, logger, sound_manager=None):
         super().__init__()
         self.command_system = command_system
         self.logger = logger
+        self.sound_manager = sound_manager
         
         self._pyaudio_instance = None
         self._stream = None
@@ -416,6 +417,10 @@ class VoiceRecognizer(QObject):
                     detected_keyword = self._porcupine_keywords[keyword_index] if keyword_index < len(self._porcupine_keywords) else "unknown"
                     self.logger.info(f"Porcupine 检测到唤醒词: {detected_keyword}")
                     self.wake_word_detected.emit(detected_keyword)
+                    
+                    if self.sound_manager:
+                        self.sound_manager.play_wake()
+                    
                     self.start_recording()
         
         except Exception as e:
@@ -497,6 +502,10 @@ class VoiceRecognizer(QObject):
                     self._wake_cooldown = time.time() + 3
                     self.logger.info(f"唤醒词检测成功: {wake_word}")
                     self.wake_word_detected.emit(wake_word)
+                    
+                    if self.sound_manager:
+                        self.sound_manager.play_wake()
+                    
                     self.start_recording()
                     
         except Exception as e:

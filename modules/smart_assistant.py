@@ -208,7 +208,7 @@ class SmartAssistant(QObject):
                 self.logger.error("无法获取Token进行语音合成")
                 return None
             
-            url = f"{ERNIE_SPEECH_CONFIG['TTS_URL']}?tok={access_token}&tex={requests.utils.quote(text)}&per=0&spd=5&pit=5&vol=5&aue=3&cuid={BAIDU_ASR_CONFIG['CUID']}&lan=zh&ctp=1"
+            url = f"{ERNIE_SPEECH_CONFIG['TTS_URL']}?tok={access_token}&tex={requests.utils.quote(text)}&per=4115&spd=5&pit=6&vol=6&aue=3&cuid={BAIDU_ASR_CONFIG['CUID']}&lan=zh&ctp=1"
             
             response = requests.get(url)
             

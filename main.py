@@ -22,7 +22,7 @@ def main():
     command_system = CommandSystem(state_manager, logger)
     sound_manager = SoundManager()
     
-    voice_recognizer = VoiceRecognizer(command_system, logger)
+    voice_recognizer = VoiceRecognizer(command_system, logger, sound_manager)
     gesture_recognizer = GestureRecognizer(command_system, logger)
     
     main_window = MainWindow(state_manager, command_system, voice_recognizer, gesture_recognizer, logger, sound_manager)
