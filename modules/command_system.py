@@ -8,22 +8,38 @@ class CommandSystem:
         self.gesture_device_map = GESTURE_DEVICE_MAP
 
     def parse_command(self, command_text):
-        command_text = command_text.strip()
-
+        command_text = command_text.strip().lower()
+        
         for device, commands in DEVICE_COMMANDS.items():
             for cmd in commands:
-                if cmd in command_text:
-                    action = 'on' if any(keyword in cmd for keyword in ['打开', '开']) else 'off'
-                    return (device, action)
-
+                if cmd.lower() in command_text:
+                    if device == 'all_on':
+                        return ('all', 'on')
+                    elif device == 'all_off':
+                        return ('all', 'off')
+                    else:
+                        action = 'on' if any(keyword in cmd.lower() for keyword in ['open', 'turn on', '开', '打开', '开']) else 'off'
+                        return (device, action)
+        
         return (None, None)
 
     def execute_command(self, device, action):
         if device is None:
             self.logger.warning(f"无法识别指令: {device} {action}")
             return False
-
-        if action == 'on':
+        
+        if device == 'all':
+            devices = ['light', 'aircon', 'fan', 'tv', 'curtain']
+            success_count = 0
+            for dev in devices:
+                if action == 'on':
+                    self.state_manager.set_state(dev, True)
+                elif action == 'off':
+                    self.state_manager.set_state(dev, False)
+                success_count += 1
+            self.logger.info(f"全部设备{action}成功: {success_count}个设备")
+            return success_count > 0
+        elif action == 'on':
             self.state_manager.set_state(device, True)
             result = True
         elif action == 'off':

@@ -89,19 +89,21 @@ class SmartAssistant(QObject):
     def analyze_intent(self, text):
         intents = []
         
-        if any(keyword in text for keyword in ['时间', '几点', '现在']):
+        time_keywords = ['时间', '几点', '现在', 'time', 'what time', 'clock', "what's the time"]
+        if any(keyword in text.lower() for keyword in time_keywords):
             intents.append(('query_time', '查询时间'))
         
-        if any(keyword in text for keyword in ['天气', '温度', '冷', '热']):
+        weather_keywords = ['天气', '温度', '冷', '热', 'weather', 'temperature', 'cold', 'hot', 'warm', 'cool']
+        if any(keyword in text.lower() for keyword in weather_keywords):
             intents.append(('query_weather', '查询天气'))
         
         for device, commands in DEVICE_COMMANDS.items():
             for cmd in commands:
-                if cmd in text:
+                if cmd.lower() in text.lower():
                     intents.append(('control_device', f'控制设备: {device}'))
                     break
         
-        if any(keyword in text for keyword in ['建议', '推荐', '帮我']):
+        if any(keyword in text for keyword in ['建议', '推荐', '帮我', 'suggest', 'recommend', 'help']):
             intents.append(('get_suggestion', '获取建议'))
         
         if intents:

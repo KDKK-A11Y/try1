@@ -5,11 +5,20 @@ LOG_DIR = os.path.join(BASE_DIR, 'logs')
 MODEL_DIR = os.path.join(BASE_DIR, 'models')
 
 DEVICE_COMMANDS = {
-    'light': ['打开灯', '关闭灯', '开灯', '关灯', '灯开', '灯关'],
-    'aircon': ['打开空调', '关闭空调', '开空调', '关空调', '空调开', '空调关'],
-    'fan': ['打开风扇', '关闭风扇', '开风扇', '关风扇', '风扇开', '风扇关'],
-    'tv': ['打开电视', '关闭电视', '开电视', '关电视', '电视开', '电视关'],
-    'curtain': ['打开窗帘', '关闭窗帘', '开窗帘', '关窗帘', '窗帘开', '窗帘关']
+    'light': ['打开灯', '关闭灯', '开灯', '关灯', '灯开', '灯关', '开灯吧', '关灯吧', '开个灯', '灯打开', '灯关闭',
+              'turn on the light', 'turn off the light', 'switch on light', 'switch off light', 'light on', 'light off', 'open light', 'close light'],
+    'aircon': ['打开空调', '关闭空调', '开空调', '关空调', '空调开', '空调关', '开空调吧', '关空调吧', '开个空调', '空调打开', '空调关闭',
+               'turn on the aircon', 'turn off the aircon', 'aircon on', 'aircon off', 'switch on aircon', 'switch off aircon', 'turn on air conditioning', 'turn off air conditioning', 'ac on', 'ac off'],
+    'fan': ['打开风扇', '关闭风扇', '开风扇', '关风扇', '风扇开', '风扇关', '开风扇吧', '关风扇吧', '开个风扇', '风扇打开', '风扇关闭',
+            'turn on the fan', 'turn off the fan', 'fan on', 'fan off', 'switch on fan', 'switch off fan', 'open fan', 'close fan'],
+    'tv': ['打开电视', '关闭电视', '开电视', '关电视', '电视开', '电视关', '开电视吧', '关电视吧', '开个电视', '电视打开', '电视关闭',
+           'turn on the tv', 'turn off the tv', 'tv on', 'tv off', 'switch on tv', 'switch off tv', 'turn on television', 'turn off television'],
+    'curtain': ['打开窗帘', '关闭窗帘', '开窗帘', '关窗帘', '窗帘开', '窗帘关', '开窗帘吧', '关窗帘吧', '开个窗帘', '窗帘打开', '窗帘关闭',
+                'open curtain', 'close curtain', 'turn on curtain', 'turn off curtain', 'curtain on', 'curtain off'],
+    'all_on': ['全部打开', '全部开启', '全部开', '都打开', '都开启', '都开', '打开所有', '开启所有',
+               'turn on all', 'turn all on', 'switch on all', 'all on', 'open all'],
+    'all_off': ['全部关掉', '全部关闭', '全部关', '都关掉', '都关闭', '都关', '关闭所有', '关掉所有',
+                'turn off all', 'turn all off', 'switch off all', 'all off', 'close all', 'shut off all']
 }
 
 GESTURE_DEVICE_MAP = {
