@@ -542,7 +542,7 @@ class MainWindow(QMainWindow):
             btn.setChecked(room_id == self.current_room)
             btn.clicked.connect(lambda checked, rid=room_id: self.on_room_selected(rid))
             self.room_buttons[room_id] = btn
-            room_layout.addWidget(btn)
+            self.room_layout.addWidget(btn)
         
         add_room_btn = QPushButton('+ 添加房间')
         add_room_btn.setFont(QFont('微软雅黑', 11))
@@ -560,8 +560,8 @@ class MainWindow(QMainWindow):
             }
         """)
         add_room_btn.clicked.connect(self.on_add_room)
-        room_layout.addWidget(add_room_btn)
-        room_layout.addStretch()
+        self.room_layout.addWidget(add_room_btn)
+        self.room_layout.addStretch()
         
         left_layout.addWidget(room_group)
         
