@@ -4,6 +4,7 @@ import time
 import base64
 import os
 import uuid
+import threading
 from datetime import datetime
 from config.config import ERNIE_SPEECH_CONFIG, WEATHER_CONFIG, WAKE_WORDS, SCENE_RULES, DEVICE_COMMANDS, BAIDU_ASR_CONFIG
 from PyQt5.QtCore import QObject, pyqtSignal
@@ -222,6 +223,9 @@ class SmartAssistant(QObject):
                 
                 self.logger.info(f"语音合成成功: {text} -> {audio_path}")
                 self.speak_ready.emit(audio_path)
+                
+                threading.Thread(target=self._cleanup_audio_file, args=(audio_path,), daemon=True).start()
+                
                 return audio_path
             else:
                 self.logger.error(f"语音合成失败: {response.text}")
@@ -230,6 +234,16 @@ class SmartAssistant(QObject):
         except Exception as e:
             self.logger.error(f"语音合成异常: {str(e)}")
             return None
+    
+    def _cleanup_audio_file(self, audio_path):
+        """延迟删除临时音频文件"""
+        try:
+            time.sleep(5)
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
+                self.logger.info(f"已清理临时音频文件: {audio_path}")
+        except Exception as e:
+            pass
     
     def set_tts_enabled(self, enabled):
         self.tts_enabled = enabled
