@@ -15,6 +15,7 @@ class VoiceRecognizer(QObject):
     voice_detected = pyqtSignal(str)
     recording_state_changed = pyqtSignal(bool)
     assistant_response = pyqtSignal(list)
+    wake_word_detected = pyqtSignal(str)
     
     CHUNK = 1024
     FORMAT = pyaudio.paInt16
@@ -22,6 +23,11 @@ class VoiceRecognizer(QObject):
     RATE = 16000
     SILENCE_THRESHOLD = 150
     MIN_AUDIO_DURATION = 0.3
+    
+    WAKE_SAMPLING_RATE = 16000
+    WAKE_CHUNK = 1024
+    WAKE_THRESHOLD = 200
+    WAKE_SEGMENT_FRAMES = 15
     
     def __init__(self, command_system, logger):
         super().__init__()
@@ -40,6 +46,12 @@ class VoiceRecognizer(QObject):
         self._current_dev_pid = LANGUAGE_MODELS['mandarin']['dev_pid']
         
         self.smart_assistant = SmartAssistant(logger)
+        
+        self._wake_stream = None
+        self._wake_listener_active = False
+        self._wake_listener_thread = None
+        self._wake_audio_buffer = []
+        self._wake_cooldown = 0
         
         try:
             self._pyaudio_instance = pyaudio.PyAudio()
@@ -261,8 +273,120 @@ class VoiceRecognizer(QObject):
         except Exception as e:
             self.logger.error(f"音频处理异常: {str(e)}")
     
+    def start_wake_listener(self):
+        if not self._pyaudio_instance:
+            self.logger.error("音频设备不可用，无法启动唤醒监听")
+            return False
+        
+        if self._wake_listener_active:
+            self.logger.warning("唤醒监听已在运行")
+            return False
+        
+        self._wake_listener_active = True
+        self._wake_audio_buffer = []
+        self.logger.info("唤醒监听已启动，说出唤醒词即可激活")
+        
+        self._wake_listener_thread = threading.Thread(target=self._wake_listener_loop, daemon=True)
+        self._wake_listener_thread.start()
+        return True
+    
+    def stop_wake_listener(self):
+        if not self._wake_listener_active:
+            return
+        
+        self._wake_listener_active = False
+        self.logger.info("唤醒监听已停止")
+        
+        if self._wake_stream:
+            try:
+                self._wake_stream.stop_stream()
+                self._wake_stream.close()
+            except:
+                pass
+            self._wake_stream = None
+    
+    def _wake_listener_loop(self):
+        try:
+            self._wake_stream = self._pyaudio_instance.open(
+                format=self.FORMAT,
+                channels=self.CHANNELS,
+                rate=self.WAKE_SAMPLING_RATE,
+                input=True,
+                frames_per_buffer=self.WAKE_CHUNK,
+                stream_callback=self._wake_audio_callback
+            )
+            self._wake_stream.start_stream()
+            
+            while self._wake_listener_active:
+                time.sleep(0.1)
+                
+        except Exception as e:
+            self.logger.error(f"唤醒监听异常: {str(e)}")
+            self._wake_listener_active = False
+    
+    def _wake_audio_callback(self, in_data, frame_count, time_info, status):
+        if not self._wake_listener_active:
+            return (in_data, pyaudio.paAbort)
+        
+        audio_np = np.frombuffer(in_data, dtype=np.int16)
+        max_val = np.abs(audio_np).max()
+        
+        if max_val > self.WAKE_THRESHOLD:
+            self._wake_audio_buffer.append(in_data)
+            
+            if len(self._wake_audio_buffer) >= self.WAKE_SEGMENT_FRAMES:
+                audio_data = b''.join(self._wake_audio_buffer)
+                self._wake_audio_buffer = []
+                threading.Thread(target=self._check_wake_word, args=(audio_data,), daemon=True).start()
+        else:
+            if len(self._wake_audio_buffer) > 0:
+                self._wake_audio_buffer.pop(0)
+        
+        return (in_data, pyaudio.paContinue)
+    
+    def _check_wake_word(self, audio_data):
+        if time.time() < self._wake_cooldown:
+            return
+        
+        try:
+            access_token = self._get_access_token()
+            if not access_token:
+                return
+            
+            speech_base64 = base64.b64encode(audio_data).decode("utf8")
+            speech_len = len(audio_data)
+            
+            payload = json.dumps({
+                "format": "pcm",
+                "rate": self.RATE,
+                "channel": 1,
+                "cuid": BAIDU_ASR_CONFIG['CUID'],
+                "token": access_token,
+                "speech": speech_base64,
+                "len": speech_len,
+                "dev_pid": self._current_dev_pid
+            }, ensure_ascii=False)
+            
+            headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
+            response = requests.post(BAIDU_ASR_CONFIG['URL'], headers=headers, data=payload.encode("utf-8"))
+            result = response.json()
+            
+            if result.get('err_no') == 0:
+                text = result.get('result', [''])[0]
+                is_wake, wake_word = self.smart_assistant.check_wake_word(text)
+                
+                if is_wake:
+                    self._wake_cooldown = time.time() + 3
+                    self.logger.info(f"唤醒词检测成功: {wake_word}")
+                    self.wake_word_detected.emit(wake_word)
+                    self.start_recording()
+                    
+        except Exception as e:
+            self.logger.error(f"唤醒词检测异常: {str(e)}")
+    
     def cleanup(self):
         self.logger.info("清理语音识别器资源...")
+        self.stop_wake_listener()
         if self._stream:
             self._stream.close()
             self._stream = None

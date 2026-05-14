@@ -369,6 +369,7 @@ class MainWindow(QMainWindow):
             self.voice_recognizer.recording_state_changed.connect(self.on_recording_state_changed)
             self.voice_recognizer.assistant_response.connect(self.on_assistant_response)
             self.voice_recognizer.smart_assistant.speak_ready.connect(self.on_speak_ready)
+            self.voice_recognizer.wake_word_detected.connect(self.on_wake_word_detected)
         if self.gesture_recognizer:
             self.gesture_recognizer.gesture_detected.connect(self.on_gesture_detected)
         
@@ -667,7 +668,33 @@ class MainWindow(QMainWindow):
         
         control_layout.addWidget(reset_btn)
         
-        info_label = QLabel("💡 提示：按住麦克风按钮说话，松开自动识别")
+        self.wake_btn = QPushButton('🔔 开启语音唤醒')
+        self.wake_btn.setFixedHeight(45)
+        self.wake_btn.setFont(QFont('微软雅黑', 12, QFont.Bold))
+        self.wake_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #444, stop:1 #333);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 20px;
+                box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #555, stop:1 #444);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #666, stop:1 #555);
+            }
+            QPushButton:checked {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4CAF50, stop:1 #388E3C);
+            }
+        """)
+        self.wake_btn.setCheckable(True)
+        self.wake_btn.clicked.connect(self.on_wake_toggled)
+        control_layout.addWidget(self.wake_btn)
+        
+        info_label = QLabel("💡 提示：按住麦克风按钮说话，松开自动识别 | 说'管家管家'唤醒语音助手")
         info_label.setFont(QFont('微软雅黑', 10))
         info_label.setStyleSheet("color: #888;")
         info_label.setAlignment(Qt.AlignCenter)
@@ -811,6 +838,27 @@ class MainWindow(QMainWindow):
             self.log_text.append(f"<span style='color:#00ffaa;'>🔊 [语音]</span> 播放语音反馈")
         except Exception as e:
             self.logger.error(f"音频播放失败: {str(e)}")
+    
+    @pyqtSlot(bool)
+    def on_wake_toggled(self, checked):
+        if not self.voice_recognizer:
+            return
+        
+        if checked:
+            success = self.voice_recognizer.start_wake_listener()
+            if success:
+                self.wake_btn.setText('🔔 关闭语音唤醒')
+                self.log_text.append("<span style='color:#00ff00;'>🔔 [唤醒]</span> 语音唤醒已开启")
+        else:
+            self.voice_recognizer.stop_wake_listener()
+            self.wake_btn.setText('🔔 开启语音唤醒')
+            self.log_text.append("<span style='color:#ff6600;'>🔔 [唤醒]</span> 语音唤醒已关闭")
+    
+    @pyqtSlot(str)
+    def on_wake_word_detected(self, wake_word):
+        self.log_text.append(f"<span style='color:#ffaa00;'>✨ [唤醒]</span> 检测到唤醒词: {wake_word}，请说话...")
+        if self.sound_manager:
+            self.sound_manager.play_success()
     
     def closeEvent(self, event):
         self.log_timer.stop()
