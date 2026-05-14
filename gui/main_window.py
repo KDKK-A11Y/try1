@@ -4,6 +4,8 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
 from PyQt5.QtGui import QFont, QLinearGradient, QRadialGradient, QPalette, QBrush, QPainter, QColor, QPen
 from PyQt5.QtCore import Qt, QTimer, pyqtSlot, QRect, QPointF
 from config.config import DEVICE_NAMES
+import os
+import pygame
 
 class DeviceIcon(QWidget):
     def __init__(self, device_id):
@@ -366,12 +368,16 @@ class MainWindow(QMainWindow):
             self.voice_recognizer.voice_detected.connect(self.on_voice_detected)
             self.voice_recognizer.recording_state_changed.connect(self.on_recording_state_changed)
             self.voice_recognizer.assistant_response.connect(self.on_assistant_response)
+            self.voice_recognizer.smart_assistant.speak_ready.connect(self.on_speak_ready)
         if self.gesture_recognizer:
             self.gesture_recognizer.gesture_detected.connect(self.on_gesture_detected)
         
         self.log_timer = QTimer()
         self.log_timer.timeout.connect(self.update_log)
         self.log_timer.start(1000)
+        
+        pygame.mixer.init()
+        self.current_audio_file = None
     
     def init_ui(self):
         self.setWindowTitle('智能语音交互控制系统')
@@ -785,6 +791,26 @@ class MainWindow(QMainWindow):
             self.sound_manager.play_success()
         self.state_manager.reset_all()
         self.log_text.append("<span style='color:#00ff00;'>✅ [系统]</span> 所有设备已重置")
+    
+    @pyqtSlot(str)
+    def on_speak_ready(self, audio_path):
+        self._play_audio(audio_path)
+    
+    def _play_audio(self, audio_path):
+        try:
+            if self.current_audio_file and os.path.exists(self.current_audio_file):
+                try:
+                    pygame.mixer.music.stop()
+                except:
+                    pass
+            
+            self.current_audio_file = audio_path
+            
+            pygame.mixer.music.load(audio_path)
+            pygame.mixer.music.play()
+            self.log_text.append(f"<span style='color:#00ffaa;'>🔊 [语音]</span> 播放语音反馈")
+        except Exception as e:
+            self.logger.error(f"音频播放失败: {str(e)}")
     
     def closeEvent(self, event):
         self.log_timer.stop()

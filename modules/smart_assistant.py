@@ -1,14 +1,18 @@
 import requests
 import json
 import time
+import base64
+import os
+import uuid
 from datetime import datetime
-from config.config import ERNIE_SPEECH_CONFIG, WEATHER_CONFIG, WAKE_WORDS, SCENE_RULES, DEVICE_COMMANDS
+from config.config import ERNIE_SPEECH_CONFIG, WEATHER_CONFIG, WAKE_WORDS, SCENE_RULES, DEVICE_COMMANDS, BAIDU_ASR_CONFIG
 from PyQt5.QtCore import QObject, pyqtSignal
 
 class SmartAssistant(QObject):
     suggestion_ready = pyqtSignal(str, list)
     weather_updated = pyqtSignal(dict)
     intent_detected = pyqtSignal(str, dict)
+    speak_ready = pyqtSignal(str)
     
     def __init__(self, logger):
         super().__init__()
@@ -17,6 +21,7 @@ class SmartAssistant(QObject):
         self._token_expire_time = 0
         self.current_weather = {}
         self.last_suggestions = []
+        self.tts_enabled = True
         
     def _get_access_token(self):
         now = time.time()
@@ -188,4 +193,41 @@ class SmartAssistant(QObject):
             if suggestions:
                 responses.append(f"我来帮您处理，同时建议：{'、'.join(suggestions)}")
         
+        if responses and self.tts_enabled:
+            main_response = responses[0]
+            self.speak(main_response)
+        
         return is_wake, command, responses
+    
+    def speak(self, text):
+        try:
+            access_token = self._get_access_token()
+            if not access_token:
+                self.logger.error("无法获取Token进行语音合成")
+                return None
+            
+            url = f"{ERNIE_SPEECH_CONFIG['TTS_URL']}?tok={access_token}&tex={requests.utils.quote(text)}&per=0&spd=5&pit=5&vol=5&aue=3&cuid={BAIDU_ASR_CONFIG['CUID']}&lan=zh&ctp=1"
+            
+            response = requests.get(url)
+            
+            if response.headers.get('Content-Type') == 'audio/mp3':
+                audio_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'temp_audio')
+                os.makedirs(audio_dir, exist_ok=True)
+                
+                audio_path = os.path.join(audio_dir, f'tts_{uuid.uuid4().hex}.mp3')
+                with open(audio_path, 'wb') as f:
+                    f.write(response.content)
+                
+                self.logger.info(f"语音合成成功: {text} -> {audio_path}")
+                self.speak_ready.emit(audio_path)
+                return audio_path
+            else:
+                self.logger.error(f"语音合成失败: {response.text}")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"语音合成异常: {str(e)}")
+            return None
+    
+    def set_tts_enabled(self, enabled):
+        self.tts_enabled = enabled
