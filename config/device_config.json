@@ -29,6 +29,11 @@
       "name": "车库",
       "icon": "🚗",
       "color": "#666666"
+    },
+    "拉拉": {
+      "name": "拉拉",
+      "icon": "🏠",
+      "color": "#666666"
     }
   },
   "device_types": {
@@ -209,7 +214,8 @@
       "aircon",
       "curtain",
       "purifier",
-      "fan"
+      "fan",
+      "heater"
     ],
     "bedroom": [
       "light",
@@ -243,8 +249,11 @@
       "light",
       "smart_lock",
       "camera"
-    ]
+    ],
+    "拉拉": []
   },
   "custom_devices": {},
-  "custom_rooms": {}
+  "custom_rooms": {
+    "拉拉": true
+  }
 }

@@ -181,6 +181,10 @@ class DeviceManager:
         """获取自定义房间列表"""
         return list(self.config['custom_rooms'].keys())
     
+    def get_room_info(self, room_id):
+        """获取房间信息"""
+        return self.config['rooms'].get(room_id, {})
+    
     def get_custom_device_types(self):
         """获取自定义设备类型列表"""
         return list(self.config['custom_devices'].keys())

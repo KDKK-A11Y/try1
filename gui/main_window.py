@@ -512,8 +512,8 @@ class MainWindow(QMainWindow):
                 padding: 0 10px 0 10px;
             }
         """)
-        room_layout = QHBoxLayout(room_group)
-        room_layout.setSpacing(10)
+        self.room_layout = QHBoxLayout(room_group)
+        self.room_layout.setSpacing(10)
         
         self.room_buttons = {}
         for room_id, room_info in ROOMS.items():
@@ -1276,14 +1276,35 @@ class MainWindow(QMainWindow):
             if child.widget():
                 child.widget().deleteLater()
         
-        # 获取房间设备
-        room_devices = DEFAULT_ROOM_DEVICES.get(room_id, [])
+        # 获取房间设备（先从默认配置获取，再添加自定义设备）
+        room_devices = DEFAULT_ROOM_DEVICES.get(room_id, []).copy()
+        
+        # 如果有设备管理器，也获取自定义房间的设备
+        if self.device_manager:
+            custom_room_devices = self.device_manager.get_room_devices(room_id)
+            # 添加自定义设备（排除已存在的设备）
+            for device_type in custom_room_devices:
+                if device_type not in room_devices:
+                    room_devices.append(device_type)
+        
+        # 获取房间名称
         room_name = ROOMS.get(room_id, {}).get('name', room_id)
+        if not room_name and self.device_manager:
+            room_info = self.device_manager.get_room_info(room_id)
+            room_name = room_info.get('name', room_id)
         
         # 添加设备到网格
         for i, device_type in enumerate(room_devices):
             device_key = f"{room_id}_{device_type}"
-            device_name = f"{room_name}{DEVICE_TYPES[device_type]['name']}"
+            
+            # 获取设备名称
+            if device_type in DEVICE_TYPES:
+                device_name = f"{room_name}{DEVICE_TYPES[device_type]['name']}"
+            elif self.device_manager:
+                device_info = self.device_manager.get_all_device_types().get(device_type)
+                device_name = f"{room_name}{device_info.get('name', device_type)}" if device_info else f"{room_name}{device_type}"
+            else:
+                device_name = f"{room_name}{device_type}"
             
             widget = DeviceWidget(device_type, device_name, self.sound_manager)
             widget.toggle_btn.clicked.connect(lambda checked, did=device_key: self.on_device_toggle(did))
@@ -1392,14 +1413,20 @@ class MainWindow(QMainWindow):
     
     def on_add_device(self):
         """向当前房间添加设备"""
-        device_types = list(DEVICE_TYPES.keys())
-        device_names = [f"{DEVICE_TYPES[d]['icon']} {DEVICE_TYPES[d]['name']}" for d in device_types]
+        # 获取所有设备类型（包括自定义）
+        device_types_dict = DEVICE_TYPES.copy()
+        if self.device_manager:
+            custom_device_types = self.device_manager.get_all_device_types()
+            device_types_dict.update(custom_device_types)
+        
+        device_types = list(device_types_dict.keys())
+        device_names = [f"{device_types_dict[d]['icon']} {device_types_dict[d]['name']}" for d in device_types]
         
         device_name, ok = QInputDialog.getItem(self, '添加设备', '选择设备类型:', device_names, 0, False)
         
         if ok and device_name:
             # 提取设备类型ID
-            for device_id, info in DEVICE_TYPES.items():
+            for device_id, info in device_types_dict.items():
                 if f"{info['icon']} {info['name']}" == device_name:
                     success, message = self.device_manager.add_device_to_room(self.current_room, device_id)
                     
