@@ -167,7 +167,7 @@ class SmartAssistant(QObject):
         
         if self.current_weather:
             w = self.current_weather
-            return f"{w['city']}当前天气{w['weather']}，温度{w['temperature']}度，湿度{w['humidity']}%，风向{w['wind']}，今日气温{w['today_low']}到{w['today_high']}度"
+            return f"{w['city']}当前天气{w['weather']}，温度{w['temperature']}，湿度{w['humidity']}%，风向{w['wind']}，今日气温{w['today_low']}到{w['today_high']}"
         return "暂时无法获取天气信息"
     
     def process_text(self, text):

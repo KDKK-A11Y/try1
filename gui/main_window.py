@@ -369,9 +369,12 @@ class MainWindow(QMainWindow):
             self.voice_recognizer.recording_state_changed.connect(self.on_recording_state_changed)
             self.voice_recognizer.assistant_response.connect(self.on_assistant_response)
             self.voice_recognizer.smart_assistant.speak_ready.connect(self.on_speak_ready)
+            self.voice_recognizer.smart_assistant.weather_updated.connect(self.on_weather_updated)
             self.voice_recognizer.wake_word_detected.connect(self.on_wake_word_detected)
         if self.gesture_recognizer:
             self.gesture_recognizer.gesture_detected.connect(self.on_gesture_detected)
+        
+        QTimer.singleShot(500, self.query_weather_on_startup)
         
         self.log_timer = QTimer()
         self.log_timer.timeout.connect(self.update_log)
@@ -420,6 +423,37 @@ class MainWindow(QMainWindow):
         
         header_layout.addWidget(title_label)
         left_layout.addWidget(header_widget)
+        
+        self.weather_widget = QWidget()
+        self.weather_widget.setStyleSheet("""
+            QWidget {
+                background: rgba(0,150,255,0.1);
+                border-radius: 12px;
+                border: 1px solid rgba(0,150,255,0.3);
+                padding: 10px;
+            }
+        """)
+        weather_layout = QHBoxLayout(self.weather_widget)
+        weather_layout.setSpacing(20)
+        
+        self.weather_icon_label = QLabel('☀️')
+        self.weather_icon_label.setFont(QFont('微软雅黑', 28))
+        self.weather_icon_label.setAlignment(Qt.AlignCenter)
+        
+        self.weather_info_label = QLabel('正在获取天气...')
+        self.weather_info_label.setFont(QFont('微软雅黑', 12))
+        self.weather_info_label.setStyleSheet("color: #00aaff;")
+        
+        self.weather_temp_label = QLabel('--°C')
+        self.weather_temp_label.setFont(QFont('微软雅黑', 22, QFont.Bold))
+        self.weather_temp_label.setStyleSheet("color: #00ffff;")
+        
+        weather_layout.addWidget(self.weather_icon_label)
+        weather_layout.addWidget(self.weather_info_label)
+        weather_layout.addStretch()
+        weather_layout.addWidget(self.weather_temp_label)
+        
+        left_layout.addWidget(self.weather_widget)
         
         device_group = QGroupBox('设备控制中心')
         device_group.setStyleSheet("""
@@ -859,6 +893,34 @@ class MainWindow(QMainWindow):
         self.log_text.append(f"<span style='color:#ffaa00;'>✨ [唤醒]</span> 检测到唤醒词: {wake_word}，请说话...")
         if self.sound_manager:
             self.sound_manager.play_success()
+    
+    def query_weather_on_startup(self):
+        if self.voice_recognizer and hasattr(self.voice_recognizer, 'smart_assistant'):
+            self.log_text.append("<span style='color:#00aaff;'>🌤️ [天气]</span> 正在获取天气信息...")
+            self.voice_recognizer.smart_assistant.query_weather()
+    
+    @pyqtSlot(dict)
+    def on_weather_updated(self, weather_data):
+        city = weather_data.get('city', '未知')
+        temp = weather_data.get('temperature', '--')
+        weather = weather_data.get('weather', '未知')
+        wind = weather_data.get('wind', '')
+        humidity = weather_data.get('humidity', '')
+        today_high = weather_data.get('today_high', '')
+        today_low = weather_data.get('today_low', '')
+        
+        self.weather_info_label.setText(f"{city} {weather}\n湿度: {humidity}% {wind}")
+        self.weather_temp_label.setText(f"{temp}°C")
+        
+        weather_icons = {
+            'Sunny': '☀️', 'Clear': '🌙', 'Partly cloudy': '⛅', 'Cloudy': '☁️',
+            'Overcast': '☁️', 'Mist': '🌫️', 'Rain': '🌧️', 'Light rain': '🌦️',
+            'Heavy rain': '🌧️', 'Snow': '❄️', 'Fog': '🌫️', 'Thunder': '⛈️'
+        }
+        icon = weather_icons.get(weather, '☀️')
+        self.weather_icon_label.setText(icon)
+        
+        self.log_text.append(f"<span style='color:#00aaff;'>🌤️ [天气]</span> {city} {weather} {temp}°C (最低{today_low}, 最高{today_high})")
     
     def closeEvent(self, event):
         self.log_timer.stop()
