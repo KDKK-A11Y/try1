@@ -1,4 +1,4 @@
-from config.config import DEVICE_COMMANDS, DEVICE_NAMES, GESTURE_DEVICE_MAP, ROOM_COMMANDS, ROOMS, DEFAULT_ROOM_DEVICES
+from config.config import DEVICE_COMMANDS, DEVICE_NAMES, GESTURE_DEVICE_MAP, ROOM_COMMANDS, ROOMS, DEFAULT_ROOM_DEVICES, DEVICE_TYPES
 import re
 
 class CommandSystem:
@@ -13,7 +13,7 @@ class CommandSystem:
         """解析命令文本，返回(设备类型, 动作, 房间ID)"""
         command_text = command_text.strip().lower()
         
-        # 检查场景命令
+        # 检查场景命令（优先级最高）
         for scene, config in ROOM_COMMANDS.items():
             for cmd in config['commands']:
                 if cmd.lower() in command_text:
@@ -23,22 +23,38 @@ class CommandSystem:
         target_room = None
         for room_id, room_info in ROOMS.items():
             room_name = room_info['name']
-            if room_name in command_text or room_id in command_text:
+            if room_name.lower() in command_text or room_id in command_text:
                 target_room = room_id
                 break
         
-        # 检查设备命令
+        # 检查设备命令（支持中英文）
         for device_type, actions in DEVICE_COMMANDS.items():
             for action, commands in actions.items():
                 for cmd in commands:
                     if cmd.lower() in command_text:
                         return (device_type, action, target_room)
         
-        # 检查全部命令
-        for action in ['all_on', 'all_off']:
-            if action in command_text:
-                action_type = 'on' if action == 'all_on' else 'off'
-                return ('all', action_type, target_room)
+        # 检查全部命令（中英文）
+        all_on_commands = ['全部打开', '全部开启', '打开所有', 'turn on all', 'all on', 'switch on all']
+        all_off_commands = ['全部关闭', '全部关掉', '关闭所有', 'turn off all', 'all off', 'switch off all']
+        
+        for cmd in all_on_commands:
+            if cmd.lower() in command_text:
+                return ('all', 'on', target_room)
+        
+        for cmd in all_off_commands:
+            if cmd.lower() in command_text:
+                return ('all', 'off', target_room)
+        
+        # 尝试智能匹配（根据设备类型名称匹配）
+        for device_type, device_info in DEVICE_TYPES.items():
+            device_name_cn = device_info['name']
+            if device_name_cn in command_text:
+                # 检查动作关键词
+                if any(keyword in command_text for keyword in ['打开', '开', 'on']):
+                    return (device_type, 'on', target_room)
+                elif any(keyword in command_text for keyword in ['关闭', '关', 'off']):
+                    return (device_type, 'off', target_room)
         
         return (None, None, None)
     
@@ -89,6 +105,27 @@ class CommandSystem:
                         elif action == 'unlock':
                             self.state_manager.set_state(device_key, False)
                         success_count += 1
+                
+                # 如果有设备管理器，也检查自定义房间
+                if self.device_manager:
+                    custom_rooms = self.device_manager.get_custom_rooms()
+                    for room_id in custom_rooms:
+                        room_devices = self.device_manager.get_room_devices(room_id)
+                        if device_type in room_devices:
+                            device_key = f"{room_id}_{device_type}"
+                            if action == 'on':
+                                self.state_manager.set_state(device_key, True)
+                            elif action == 'off':
+                                self.state_manager.set_state(device_key, False)
+                            elif action == 'open':
+                                self.state_manager.set_state(device_key, True)
+                            elif action == 'close':
+                                self.state_manager.set_state(device_key, False)
+                            elif action == 'lock':
+                                self.state_manager.set_state(device_key, True)
+                            elif action == 'unlock':
+                                self.state_manager.set_state(device_key, False)
+                            success_count += 1
             except Exception as e:
                 self.logger.error(f"场景动作执行失败: {e}")
         
@@ -96,7 +133,9 @@ class CommandSystem:
             'good_morning': '早上好',
             'good_night': '晚安',
             'leave_home': '出门',
-            'come_home': '回家'
+            'come_home': '回家',
+            'all_on': '全部打开',
+            'all_off': '全部关闭'
         }.get(scene_name, scene_name)
         
         self.command_history.append({
@@ -120,12 +159,35 @@ class CommandSystem:
             if room_id in DEFAULT_ROOM_DEVICES:
                 for device_type in DEFAULT_ROOM_DEVICES[room_id]:
                     devices.append(f"{room_id}_{device_type}")
+            
+            # 如果有设备管理器，也检查自定义房间
+            if self.device_manager:
+                custom_room_devices = self.device_manager.get_room_devices(room_id)
+                for device_type in custom_room_devices:
+                    device_key = f"{room_id}_{device_type}"
+                    if device_key not in devices:
+                        devices.append(device_key)
+            
             room_name = ROOMS.get(room_id, {}).get('name', room_id)
+            if not room_name and self.device_manager:
+                room_info = self.device_manager.get_room_info(room_id)
+                room_name = room_info.get('name', room_id)
         else:
             # 控制所有房间的设备
             for room, room_devices in DEFAULT_ROOM_DEVICES.items():
                 for device_type in room_devices:
                     devices.append(f"{room}_{device_type}")
+            
+            # 如果有设备管理器，也包含自定义房间
+            if self.device_manager:
+                custom_rooms = self.device_manager.get_custom_rooms()
+                for room_id in custom_rooms:
+                    custom_room_devices = self.device_manager.get_room_devices(room_id)
+                    for device_type in custom_room_devices:
+                        device_key = f"{room_id}_{device_type}"
+                        if device_key not in devices:
+                            devices.append(device_key)
+            
             room_name = '所有房间'
         
         success_count = 0
@@ -160,19 +222,42 @@ class CommandSystem:
             # 只控制指定房间的设备
             if room_id in DEFAULT_ROOM_DEVICES and device_type in DEFAULT_ROOM_DEVICES[room_id]:
                 devices_to_control.append(f"{room_id}_{device_type}")
-            else:
-                return False, f"{ROOMS.get(room_id, {}).get('name', room_id)}没有{DEVICE_NAMES.get(device_type, device_type)}"
+            
+            # 如果有设备管理器，也检查自定义房间中的设备
+            if self.device_manager:
+                custom_room_devices = self.device_manager.get_room_devices(room_id)
+                if device_type in custom_room_devices:
+                    device_key = f"{room_id}_{device_type}"
+                    if device_key not in devices_to_control:
+                        devices_to_control.append(device_key)
+            
+            if not devices_to_control:
+                room_name = ROOMS.get(room_id, {}).get('name', room_id)
+                if not room_name and self.device_manager:
+                    room_info = self.device_manager.get_room_info(room_id)
+                    room_name = room_info.get('name', room_id)
+                return False, f"{room_name}没有{DEVICE_TYPES.get(device_type, {}).get('name', device_type)}"
         else:
             # 控制所有房间中的该类型设备
             for room, room_devices in DEFAULT_ROOM_DEVICES.items():
                 if device_type in room_devices:
                     devices_to_control.append(f"{room}_{device_type}")
             
+            # 如果有设备管理器，也包含自定义房间中的设备
+            if self.device_manager:
+                custom_rooms = self.device_manager.get_custom_rooms()
+                for room_id in custom_rooms:
+                    custom_room_devices = self.device_manager.get_room_devices(room_id)
+                    if device_type in custom_room_devices:
+                        device_key = f"{room_id}_{device_type}"
+                        if device_key not in devices_to_control:
+                            devices_to_control.append(device_key)
+            
             if not devices_to_control:
-                return False, f"未找到{DEVICE_NAMES.get(device_type, device_type)}设备"
+                return False, f"未找到{DEVICE_TYPES.get(device_type, {}).get('name', device_type)}设备"
         
         success_count = 0
-        device_name = DEVICE_NAMES.get(device_type, device_type)
+        device_name = DEVICE_TYPES.get(device_type, {}).get('name', device_type)
         
         for device_key in devices_to_control:
             try:
@@ -190,8 +275,56 @@ class CommandSystem:
                     self.state_manager.set_state(device_key, True)
                 elif action == 'unlock':  # 门锁
                     self.state_manager.set_state(device_key, False)
+                elif action == 'cool':  # 空调制冷
+                    self.state_manager.set_state(device_key, True)
+                    self.logger.info(f"设备 {device_key} 切换到制冷模式")
+                elif action == 'heat':  # 空调制热
+                    self.state_manager.set_state(device_key, True)
+                    self.logger.info(f"设备 {device_key} 切换到制热模式")
+                elif action == 'auto':  # 自动模式
+                    self.state_manager.set_state(device_key, True)
+                    self.logger.info(f"设备 {device_key} 切换到自动模式")
+                elif action == 'temp_up':  # 温度升高
+                    self.state_manager.set_state(device_key, True)
+                    self.logger.info(f"设备 {device_key} 温度升高")
+                elif action == 'temp_down':  # 温度降低
+                    self.state_manager.set_state(device_key, True)
+                    self.logger.info(f"设备 {device_key} 温度降低")
+                elif action == 'speed_up':  # 风速加大
+                    self.state_manager.set_state(device_key, True)
+                    self.logger.info(f"设备 {device_key} 风速加大")
+                elif action == 'speed_down':  # 风速减小
+                    self.state_manager.set_state(device_key, True)
+                    self.logger.info(f"设备 {device_key} 风速减小")
+                elif action == 'volume_up':  # 音量加大
+                    self.state_manager.set_state(device_key, True)
+                    self.logger.info(f"设备 {device_key} 音量加大")
+                elif action == 'volume_down':  # 音量减小
+                    self.state_manager.set_state(device_key, True)
+                    self.logger.info(f"设备 {device_key} 音量减小")
+                elif action == 'channel_up':  # 上一台
+                    self.state_manager.set_state(device_key, True)
+                    self.logger.info(f"设备 {device_key} 上一台")
+                elif action == 'channel_down':  # 下一台
+                    self.state_manager.set_state(device_key, True)
+                    self.logger.info(f"设备 {device_key} 下一台")
+                elif action == 'half':  # 半开
+                    self.state_manager.set_state(device_key, True)
+                    self.logger.info(f"设备 {device_key} 半开")
+                elif action == 'record':  # 开始录像
+                    self.state_manager.set_state(device_key, True)
+                    self.logger.info(f"设备 {device_key} 开始录像")
+                elif action == 'snapshot':  # 拍照
+                    self.state_manager.set_state(device_key, True)
+                    self.logger.info(f"设备 {device_key} 拍照")
+                elif action == 'return':  # 返回充电
+                    self.state_manager.set_state(device_key, True)
+                    self.logger.info(f"设备 {device_key} 返回充电")
+                elif action == 'color':  # 变色
+                    self.state_manager.set_state(device_key, True)
+                    self.logger.info(f"设备 {device_key} 变色")
                 else:
-                    # 其他动作（如调节温度、音量等）
+                    # 其他动作
                     self.state_manager.set_state(device_key, True)
                     self.logger.info(f"设备 {device_key} {action}")
                 
@@ -209,6 +342,9 @@ class CommandSystem:
         if success_count > 0:
             if room_id:
                 room_name = ROOMS.get(room_id, {}).get('name', room_id)
+                if not room_name and self.device_manager:
+                    room_info = self.device_manager.get_room_info(room_id)
+                    room_name = room_info.get('name', room_id)
                 msg = f"{room_name}的{device_name}已{action_text}"
             else:
                 msg = f"{success_count}个{device_name}已{action_text}"
@@ -242,7 +378,8 @@ class CommandSystem:
             'half': '半开',
             'record': '开始录像',
             'snapshot': '拍照',
-            'return': '返回充电'
+            'return': '返回充电',
+            'color': '变色'
         }
         return action_map.get(action, action)
     

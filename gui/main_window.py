@@ -592,9 +592,6 @@ class MainWindow(QMainWindow):
         
         self.device_widgets = {}
         
-        # 初始加载当前房间的设备
-        self.load_room_devices(self.current_room)
-        
         scroll_area = QScrollArea()
         scroll_area.setWidget(self.device_grid_container)
         scroll_area.setWidgetResizable(True)
@@ -953,6 +950,9 @@ class MainWindow(QMainWindow):
         
         main_layout.addWidget(left_panel)
         main_layout.addWidget(right_panel)
+        
+        # 初始加载当前房间的设备（在log_text创建之后）
+        self.load_room_devices(self.current_room)
     
     @pyqtSlot(str, bool)
     def update_device_state(self, device, state):
