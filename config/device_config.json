@@ -228,7 +228,9 @@
       "curtain",
       "humidifier",
       "heater",
-      "speaker"
+      "speaker",
+      "smoke_detector",
+      "robot_vacuum"
     ],
     "kitchen": [
       "light",

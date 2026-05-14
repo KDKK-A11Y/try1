@@ -16,34 +16,51 @@ ROOMS = {
 
 # 设备类型配置
 DEVICE_TYPES = {
+    # 照明类
     'light': {'name': '灯', 'icon': '💡', 'category': 'lighting', 'power_consumption': 15},
+    'rgb_strip': {'name': '灯带', 'icon': '🌈', 'category': 'lighting', 'power_consumption': 20},
+    
+    # 气候类
     'aircon': {'name': '空调', 'icon': '❄️', 'category': 'climate', 'power_consumption': 1500},
     'fan': {'name': '风扇', 'icon': '🌀', 'category': 'climate', 'power_consumption': 50},
-    'tv': {'name': '电视', 'icon': '📺', 'category': 'entertainment', 'power_consumption': 100},
-    'curtain': {'name': '窗帘', 'icon': '🪟', 'category': 'window', 'power_consumption': 30},
     'heater': {'name': '暖气', 'icon': '🔥', 'category': 'climate', 'power_consumption': 2000},
     'humidifier': {'name': '加湿器', 'icon': '💧', 'category': 'climate', 'power_consumption': 40},
     'dehumidifier': {'name': '除湿机', 'icon': '🍃', 'category': 'climate', 'power_consumption': 300},
     'purifier': {'name': '空气净化器', 'icon': '🌬️', 'category': 'climate', 'power_consumption': 60},
+    'air_purifier': {'name': '新风系统', 'icon': '💨', 'category': 'climate', 'power_consumption': 120},
+    
+    # 娱乐类
+    'tv': {'name': '电视', 'icon': '📺', 'category': 'entertainment', 'power_consumption': 100},
     'speaker': {'name': '音响', 'icon': '🔊', 'category': 'entertainment', 'power_consumption': 80},
     'projector': {'name': '投影仪', 'icon': '📽️', 'category': 'entertainment', 'power_consumption': 200},
-    'robot_vacuum': {'name': '扫地机器人', 'icon': '🤖', 'category': 'cleaning', 'power_consumption': 80},
+    
+    # 安全类
     'smart_lock': {'name': '智能门锁', 'icon': '🔒', 'category': 'security', 'power_consumption': 5},
     'camera': {'name': '摄像头', 'icon': '📷', 'category': 'security', 'power_consumption': 10},
     'door_sensor': {'name': '门磁传感器', 'icon': '🚪', 'category': 'security', 'power_consumption': 2},
     'motion_sensor': {'name': '人体传感器', 'icon': '👤', 'category': 'security', 'power_consumption': 3},
     'smoke_detector': {'name': '烟雾报警器', 'icon': '🚨', 'category': 'security', 'power_consumption': 1},
+    
+    # 家电类
     'water_heater': {'name': '热水器', 'icon': '🛁', 'category': 'appliance', 'power_consumption': 1500},
     'oven': {'name': '烤箱', 'icon': '🍞', 'category': 'appliance', 'power_consumption': 2000},
     'microwave': {'name': '微波炉', 'icon': '🧊', 'category': 'appliance', 'power_consumption': 800},
     'refrigerator': {'name': '冰箱', 'icon': '❄️', 'category': 'appliance', 'power_consumption': 150},
-    'washing_machine': {'name': '洗衣机', 'icon': '🧺', 'category': 'appliance', 'power_consumption': 500},
+    'washing_machine': {'name': '洗衣机', 'icon': '👕', 'category': 'appliance', 'power_consumption': 500},
     'dishwasher': {'name': '洗碗机', 'icon': '🍽️', 'category': 'appliance', 'power_consumption': 1200},
     'coffee_maker': {'name': '咖啡机', 'icon': '☕', 'category': 'appliance', 'power_consumption': 800},
-    'air_purifier': {'name': '新风系统', 'icon': '💨', 'category': 'climate', 'power_consumption': 120},
-    'rgb_strip': {'name': '灯带', 'icon': '🌈', 'category': 'lighting', 'power_consumption': 20},
+    
+    # 清洁类
+    'robot_vacuum': {'name': '扫地机器人', 'icon': '🤖', 'category': 'cleaning', 'power_consumption': 80},
+    
+    # 窗户类
+    'curtain': {'name': '窗帘', 'icon': '🪟', 'category': 'window', 'power_consumption': 30},
+    
+    # 电源类
     'smart_socket': {'name': '智能插座', 'icon': '🔌', 'category': 'power', 'power_consumption': 0},
-    'water_valve': {'name': '智能水阀', 'icon': '💧', 'category': 'water', 'power_consumption': 10}
+    
+    # 水务类
+    'water_valve': {'name': '智能水阀', 'icon': '🚰', 'category': 'water', 'power_consumption': 10}
 }
 
 # 默认房间设备配置

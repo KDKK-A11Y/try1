@@ -18,6 +18,10 @@ class DeviceIcon(QWidget):
         self.rotation = 0
         self.blink_state = True
         self.wind_offset = 0
+        self.water_drop_offset = 0
+        self.sweep_angle = 0
+        self.pulse_scale = 1.0
+        self.pulse_direction = 1
         
         self.animation_timer = QTimer()
         self.animation_timer.timeout.connect(self.update_animation)
@@ -31,21 +35,34 @@ class DeviceIcon(QWidget):
             self.animation_timer.stop()
             self.rotation = 0
             self.wind_offset = 0
+            self.water_drop_offset = 0
+            self.sweep_angle = 0
+            self.pulse_scale = 1.0
         self.update()
     
     def update_animation(self):
-        if self.device_id == 'fan':
+        if self.device_id in ['fan', 'robot_vacuum']:
             self.rotation += 8
             if self.rotation >= 360:
                 self.rotation = 0
-        elif self.device_id == 'aircon':
+        elif self.device_id in ['aircon', 'purifier', 'air_purifier']:
             self.wind_offset += 5
             if self.wind_offset >= 60:
                 self.wind_offset = 0
         elif self.device_id == 'light':
             self.blink_state = not self.blink_state
-        elif self.device_id == 'curtain':
-            pass
+        elif self.device_id in ['humidifier', 'water_valve']:
+            self.water_drop_offset += 3
+            if self.water_drop_offset >= 100:
+                self.water_drop_offset = 0
+        elif self.device_id == 'camera':
+            self.sweep_angle += 2
+            if self.sweep_angle >= 360:
+                self.sweep_angle = 0
+        elif self.device_id in ['speaker', 'smoke_detector']:
+            self.pulse_scale += 0.02 * self.pulse_direction
+            if self.pulse_scale >= 1.1 or self.pulse_scale <= 0.9:
+                self.pulse_direction *= -1
         self.update()
     
     def paintEvent(self, event):
@@ -55,16 +72,40 @@ class DeviceIcon(QWidget):
         center_x = self.width() // 2
         center_y = self.height() // 2
         
-        if self.device_id == 'light':
-            self.draw_light(painter, center_x, center_y)
-        elif self.device_id == 'fan':
-            self.draw_fan(painter, center_x, center_y)
-        elif self.device_id == 'aircon':
-            self.draw_aircon(painter, center_x, center_y)
-        elif self.device_id == 'tv':
-            self.draw_tv(painter, center_x, center_y)
-        elif self.device_id == 'curtain':
-            self.draw_curtain(painter, center_x, center_y)
+        # 根据设备类型绘制不同图标
+        device_drawers = {
+            'light': self.draw_light,
+            'fan': self.draw_fan,
+            'aircon': self.draw_aircon,
+            'tv': self.draw_tv,
+            'curtain': self.draw_curtain,
+            'heater': self.draw_heater,
+            'humidifier': self.draw_humidifier,
+            'dehumidifier': self.draw_dehumidifier,
+            'purifier': self.draw_purifier,
+            'speaker': self.draw_speaker,
+            'projector': self.draw_projector,
+            'robot_vacuum': self.draw_robot_vacuum,
+            'smart_lock': self.draw_smart_lock,
+            'camera': self.draw_camera,
+            'door_sensor': self.draw_door_sensor,
+            'motion_sensor': self.draw_motion_sensor,
+            'smoke_detector': self.draw_smoke_detector,
+            'water_heater': self.draw_water_heater,
+            'oven': self.draw_oven,
+            'microwave': self.draw_microwave,
+            'refrigerator': self.draw_refrigerator,
+            'washing_machine': self.draw_washing_machine,
+            'dishwasher': self.draw_dishwasher,
+            'coffee_maker': self.draw_coffee_maker,
+            'air_purifier': self.draw_air_purifier,
+            'rgb_strip': self.draw_rgb_strip,
+            'smart_socket': self.draw_smart_socket,
+            'water_valve': self.draw_water_valve
+        }
+        
+        drawer = device_drawers.get(self.device_id, self.draw_default)
+        drawer(painter, center_x, center_y)
     
     def draw_light(self, painter, cx, cy):
         if self.state:
@@ -218,6 +259,403 @@ class DeviceIcon(QWidget):
         painter.setBrush(QBrush(QColor(80, 80, 80)))
         painter.setPen(QPen(QColor(100, 100, 100), 2))
         painter.drawRect(cx-38, cy-38, 76, 8)
+    
+    def draw_heater(self, painter, cx, cy):
+        painter.setPen(QPen(QColor(120, 120, 120), 2))
+        painter.setBrush(QBrush(QColor(60, 60, 60)))
+        painter.drawRect(cx-30, cy-20, 60, 40)
+        
+        if self.state:
+            painter.setPen(QPen(QColor(255, 100, 50), 2))
+            for i in range(3):
+                y = cy - 10 + i * 15
+                alpha = 100 + ((self.wind_offset + i * 20) % 30) * 5
+                painter.setPen(QPen(QColor(255, 150, 100, alpha), 2))
+                painter.drawLine(cx-20, y, cx+20, y)
+            
+            glow = QRadialGradient(cx, cy, 40)
+            glow.setColorAt(0, QColor(255, 150, 100, 30))
+            glow.setColorAt(1, QColor(255, 100, 50, 0))
+            painter.setBrush(QBrush(glow))
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(cx-35, cy-35, 70, 70)
+    
+    def draw_humidifier(self, painter, cx, cy):
+        painter.setPen(QPen(QColor(120, 180, 220), 2))
+        painter.setBrush(QBrush(QColor(60, 120, 180)))
+        painter.drawEllipse(cx-25, cy-15, 50, 35)
+        
+        painter.setPen(QPen(QColor(80, 140, 200), 2))
+        painter.setBrush(QBrush(QColor(100, 160, 220)))
+        painter.drawEllipse(cx-15, cy-25, 30, 15)
+        
+        if self.state:
+            for i in range(3):
+                offset = (self.water_drop_offset + i * 30) % 100
+                y_pos = cy + 10 - offset * 0.4
+                alpha = int(150 - offset * 1.5)
+                if alpha > 0:
+                    painter.setPen(QPen(QColor(150, 200, 255, alpha), 1))
+                    painter.setBrush(QBrush(QColor(150, 200, 255, alpha)))
+                    painter.drawEllipse(cx-8 + i*8, int(y_pos), 4, 6)
+    
+    def draw_dehumidifier(self, painter, cx, cy):
+        painter.setPen(QPen(QColor(120, 180, 150), 2))
+        painter.setBrush(QBrush(QColor(60, 120, 100)))
+        painter.drawRect(cx-25, cy-20, 50, 40)
+        
+        painter.setPen(QPen(QColor(80, 140, 120), 2))
+        painter.drawRect(cx-20, cy+5, 40, 10)
+        
+        if self.state:
+            for i in range(3):
+                offset = (self.wind_offset + i * 20) % 60
+                alpha = 100 + (offset % 30) * 5
+                painter.setPen(QPen(QColor(100, 200, 150, alpha), 2))
+                painter.drawLine(cx-15 + i*10, cy-5, cx-10 + i*10, cy-15)
+    
+    def draw_purifier(self, painter, cx, cy):
+        painter.setPen(QPen(QColor(120, 180, 200), 2))
+        painter.setBrush(QBrush(QColor(60, 100, 120)))
+        painter.drawEllipse(cx-25, cy-30, 50, 60)
+        
+        painter.setPen(QPen(Qt.NoPen))
+        painter.setBrush(QBrush(QColor(80, 130, 160)))
+        painter.drawEllipse(cx-20, cy-25, 40, 50)
+        
+        if self.state:
+            for i in range(4):
+                offset = (self.wind_offset + i * 15) % 60
+                alpha = 80 + (offset % 30) * 4
+                angle = i * 90
+                painter.save()
+                painter.translate(cx, cy)
+                painter.rotate(angle)
+                painter.setPen(QPen(QColor(150, 220, 255, alpha), 2))
+                painter.drawLine(0, -15, 0, -25)
+                painter.restore()
+    
+    def draw_speaker(self, painter, cx, cy):
+        painter.save()
+        painter.translate(cx, cy)
+        painter.scale(self.pulse_scale, self.pulse_scale)
+        
+        painter.setPen(QPen(QColor(100, 100, 100), 2))
+        painter.setBrush(QBrush(QColor(50, 50, 50)))
+        painter.drawRect(cx-30, cy-25, 60, 50)
+        
+        painter.setPen(QPen(QColor(80, 80, 80), 1))
+        for row in range(4):
+            for col in range(6):
+                painter.drawRect(cx-25 + col*8, cy-20 + row*10, 5, 5)
+        
+        if self.state:
+            glow = QRadialGradient(cx, cy, 40)
+            glow.setColorAt(0, QColor(100, 150, 255, 20))
+            glow.setColorAt(1, QColor(100, 150, 255, 0))
+            painter.setBrush(QBrush(glow))
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(cx-35, cy-35, 70, 70)
+        
+        painter.restore()
+    
+    def draw_projector(self, painter, cx, cy):
+        painter.setPen(QPen(QColor(100, 100, 100), 2))
+        painter.setBrush(QBrush(QColor(60, 60, 60)))
+        painter.drawRect(cx-30, cy-15, 60, 30)
+        
+        painter.setPen(QPen(QColor(120, 120, 120), 2))
+        painter.setBrush(QBrush(QColor(80, 80, 80)))
+        painter.drawRect(cx+20, cy-10, 15, 20)
+        
+        if self.state:
+            painter.setPen(QPen(QColor(255, 255, 200, 150), 2))
+            painter.drawLine(cx+35, cy, cx+60, cy-10)
+            painter.drawLine(cx+35, cy, cx+60, cy+10)
+            painter.drawLine(cx+35, cy, cx+60, cy)
+    
+    def draw_robot_vacuum(self, painter, cx, cy):
+        painter.save()
+        painter.translate(cx, cy)
+        painter.rotate(self.rotation)
+        
+        painter.setPen(QPen(QColor(100, 150, 200), 2))
+        painter.setBrush(QBrush(QColor(60, 100, 150)))
+        painter.drawEllipse(-25, -20, 50, 40)
+        
+        painter.setPen(QPen(QColor(80, 130, 180), 2))
+        painter.setBrush(QBrush(QColor(100, 150, 200)))
+        painter.drawEllipse(-8, -5, 16, 10)
+        
+        painter.setPen(QPen(QColor(120, 170, 220), 1))
+        painter.drawArc(-15, -10, 30, 20, 0, 360 * 16)
+        
+        painter.restore()
+    
+    def draw_smart_lock(self, painter, cx, cy):
+        painter.setPen(QPen(QColor(120, 120, 120), 2))
+        painter.setBrush(QBrush(QColor(60, 60, 60)))
+        painter.drawRect(cx-15, cy-25, 30, 50)
+        
+        painter.setPen(QPen(QColor(100, 100, 100), 2))
+        painter.setBrush(QBrush(QColor(80, 80, 80)))
+        painter.drawRect(cx-10, cy+10, 20, 15)
+        
+        if self.state:
+            painter.setPen(QPen(QColor(50, 200, 50), 3))
+            painter.drawLine(cx-5, cy+15, cx+5, cy+20)
+            painter.drawLine(cx+5, cy+20, cx+5, cy+12)
+        else:
+            painter.setPen(QPen(QColor(200, 50, 50), 3))
+            painter.drawLine(cx-5, cy+12, cx+5, cy+22)
+            painter.drawLine(cx+5, cy+12, cx-5, cy+22)
+    
+    def draw_camera(self, painter, cx, cy):
+        painter.setPen(QPen(QColor(100, 100, 100), 2))
+        painter.setBrush(QBrush(QColor(50, 50, 50)))
+        painter.drawRect(cx-20, cy-20, 40, 40)
+        
+        painter.setPen(QPen(QColor(80, 80, 80), 2))
+        painter.setBrush(QBrush(QColor(30, 30, 30)))
+        painter.drawEllipse(cx-8, cy-8, 16, 16)
+        
+        if self.state:
+            painter.setPen(QPen(QColor(0, 150, 255), 1))
+            painter.drawArc(cx-15, cy-15, 30, 30, -30 * 16, 60 * 16)
+    
+    def draw_door_sensor(self, painter, cx, cy):
+        painter.setPen(QPen(QColor(120, 120, 120), 2))
+        painter.setBrush(QBrush(QColor(60, 60, 60)))
+        
+        painter.drawRect(cx-25, cy-30, 15, 60)
+        painter.drawRect(cx+10, cy-30, 15, 60)
+        
+        if self.state:
+            painter.setPen(QPen(QColor(50, 200, 50), 2))
+            painter.drawLine(cx-10, cy, cx+10, cy)
+        else:
+            painter.setPen(QPen(QColor(200, 50, 50), 2))
+            painter.drawLine(cx-10, cy-10, cx+10, cy+10)
+            painter.drawLine(cx-10, cy+10, cx+10, cy-10)
+    
+    def draw_motion_sensor(self, painter, cx, cy):
+        painter.setPen(QPen(QColor(100, 150, 180), 2))
+        painter.setBrush(QBrush(QColor(60, 100, 130)))
+        painter.drawEllipse(cx-20, cy-25, 40, 50)
+        
+        painter.setPen(QPen(QColor(80, 130, 160), 2))
+        painter.setBrush(QBrush(QColor(80, 130, 160)))
+        painter.drawEllipse(cx-10, cy-5, 20, 30)
+        
+        if self.state:
+            painter.setPen(QPen(QColor(255, 200, 100, 100), 1))
+            for i in range(3):
+                angle = -60 + i * 60
+                painter.drawArc(cx-30, cy-30, 60, 60, angle * 16, 30 * 16)
+    
+    def draw_smoke_detector(self, painter, cx, cy):
+        painter.save()
+        painter.translate(cx, cy)
+        painter.scale(self.pulse_scale, self.pulse_scale)
+        
+        painter.setPen(QPen(QColor(100, 100, 100), 2))
+        painter.setBrush(QBrush(QColor(80, 80, 80)))
+        painter.drawEllipse(cx-20, cy-15, 40, 30)
+        
+        painter.setPen(QPen(QColor(120, 120, 120), 2))
+        painter.setBrush(QBrush(QColor(100, 100, 100)))
+        painter.drawEllipse(cx-8, cy-18, 16, 8)
+        
+        if self.state:
+            painter.setPen(QPen(QColor(255, 100, 100), 2))
+            painter.drawArc(cx-15, cy-25, 30, 30, 0, 360 * 16)
+        
+        painter.restore()
+    
+    def draw_water_heater(self, painter, cx, cy):
+        painter.setPen(QPen(QColor(120, 100, 80), 2))
+        painter.setBrush(QBrush(QColor(60, 50, 40)))
+        painter.drawRect(cx-15, cy-30, 30, 60)
+        
+        painter.setPen(QPen(QColor(100, 80, 60), 2))
+        painter.drawRect(cx-12, cy-25, 24, 50)
+        
+        if self.state:
+            painter.setPen(QPen(QColor(255, 150, 100), 2))
+            for i in range(4):
+                y = cy - 20 + i * 12
+                alpha = 100 + ((self.wind_offset + i * 15) % 30) * 5
+                painter.setPen(QPen(QColor(255, 150, 100, alpha), 2))
+                painter.drawLine(cx-5, y, cx+5, y)
+    
+    def draw_oven(self, painter, cx, cy):
+        painter.setPen(QPen(QColor(100, 100, 100), 2))
+        painter.setBrush(QBrush(QColor(50, 50, 50)))
+        painter.drawRect(cx-25, cy-20, 50, 40)
+        
+        painter.setPen(QPen(QColor(80, 80, 80), 2))
+        painter.setBrush(QBrush(QColor(40, 40, 40)))
+        painter.drawRect(cx-20, cy-15, 40, 30)
+        
+        if self.state:
+            painter.setPen(QPen(QColor(255, 150, 100), 2))
+            painter.drawRect(cx-18, cy-13, 36, 26)
+            painter.setPen(QPen(QColor(255, 200, 150, 100), 1))
+            painter.drawLine(cx-8, cy-5, cx+8, cy-5)
+            painter.drawLine(cx-8, cy+5, cx+8, cy+5)
+    
+    def draw_microwave(self, painter, cx, cy):
+        painter.setPen(QPen(QColor(100, 120, 150), 2))
+        painter.setBrush(QBrush(QColor(50, 60, 80)))
+        painter.drawRect(cx-25, cy-20, 50, 40)
+        
+        painter.setPen(QPen(QColor(80, 100, 130), 2))
+        painter.setBrush(QBrush(QColor(40, 50, 70)))
+        painter.drawRect(cx-20, cy-15, 25, 30)
+        
+        painter.setPen(QPen(QColor(80, 100, 130), 1))
+        painter.drawRect(cx+5, cy-10, 12, 20)
+        
+        if self.state:
+            painter.setPen(QPen(QColor(100, 200, 255), 2))
+            painter.drawRect(cx-18, cy-13, 21, 26)
+    
+    def draw_refrigerator(self, painter, cx, cy):
+        painter.setPen(QPen(QColor(120, 150, 180), 2))
+        painter.setBrush(QBrush(QColor(60, 90, 120)))
+        painter.drawRect(cx-20, cy-30, 40, 60)
+        
+        painter.setPen(QPen(QColor(100, 130, 160), 2))
+        painter.drawLine(cx-18, cy, cx+18, cy)
+        
+        if self.state:
+            painter.setPen(QPen(QColor(100, 180, 255, 50), 1))
+            painter.drawLine(cx-15, cy-25, cx+15, cy-25)
+            painter.drawLine(cx-15, cy-20, cx+15, cy-20)
+    
+    def draw_washing_machine(self, painter, cx, cy):
+        painter.setPen(QPen(QColor(100, 100, 120), 2))
+        painter.setBrush(QBrush(QColor(50, 50, 70)))
+        painter.drawRect(cx-25, cy-25, 50, 50)
+        
+        painter.setPen(QPen(QColor(80, 80, 100), 2))
+        painter.setBrush(QBrush(QColor(40, 40, 60)))
+        painter.drawEllipse(cx-15, cy-15, 30, 30)
+        
+        if self.state:
+            painter.save()
+            painter.translate(cx, cy)
+            painter.rotate(self.rotation)
+            painter.setPen(QPen(QColor(100, 150, 200), 2))
+            painter.drawLine(-10, 0, 10, 0)
+            painter.drawLine(0, -10, 0, 10)
+            painter.restore()
+    
+    def draw_dishwasher(self, painter, cx, cy):
+        painter.setPen(QPen(QColor(100, 120, 140), 2))
+        painter.setBrush(QBrush(QColor(50, 60, 70)))
+        painter.drawRect(cx-25, cy-20, 50, 40)
+        
+        painter.setPen(QPen(QColor(80, 100, 120), 2))
+        painter.setBrush(QBrush(QColor(40, 50, 60)))
+        painter.drawRect(cx-20, cy-15, 40, 30)
+        
+        if self.state:
+            painter.setPen(QPen(QColor(100, 180, 220), 1))
+            for i in range(3):
+                y = cy - 10 + i * 10
+                painter.drawLine(cx-15, y, cx+15, y)
+    
+    def draw_coffee_maker(self, painter, cx, cy):
+        painter.setPen(QPen(QColor(100, 80, 60), 2))
+        painter.setBrush(QBrush(QColor(60, 40, 30)))
+        painter.drawRect(cx-15, cy-30, 30, 50)
+        
+        painter.setPen(QPen(QColor(80, 60, 40), 2))
+        painter.setBrush(QBrush(QColor(40, 30, 20)))
+        painter.drawRect(cx-12, cy-25, 24, 15)
+        
+        painter.setPen(QPen(QColor(80, 60, 40), 2))
+        painter.drawRect(cx-8, cy+5, 16, 20)
+        
+        if self.state:
+            painter.setPen(QPen(QColor(150, 100, 50), 2))
+            painter.setBrush(QBrush(QColor(150, 100, 50)))
+            painter.drawEllipse(cx-5, cy+25, 10, 8)
+    
+    def draw_air_purifier(self, painter, cx, cy):
+        painter.setPen(QPen(QColor(100, 180, 150), 2))
+        painter.setBrush(QBrush(QColor(50, 100, 80)))
+        painter.drawEllipse(cx-20, cy-30, 40, 60)
+        
+        painter.setPen(QPen(Qt.NoPen))
+        painter.setBrush(QBrush(QColor(70, 130, 110)))
+        painter.drawEllipse(cx-15, cy-25, 30, 50)
+        
+        if self.state:
+            for i in range(4):
+                offset = (self.wind_offset + i * 15) % 60
+                alpha = 80 + (offset % 30) * 4
+                painter.setPen(QPen(QColor(100, 220, 180, alpha), 2))
+                painter.drawLine(cx-10 + i*5, cy-20, cx-10 + i*5, cy+20)
+    
+    def draw_rgb_strip(self, painter, cx, cy):
+        painter.setPen(QPen(QColor(80, 80, 80), 2))
+        painter.setBrush(QBrush(QColor(40, 40, 40)))
+        painter.drawRect(cx-35, cy-8, 70, 16)
+        
+        if self.state:
+            colors = [QColor(255, 0, 0), QColor(255, 128, 0), QColor(255, 255, 0), 
+                      QColor(0, 255, 0), QColor(0, 0, 255), QColor(128, 0, 255)]
+            for i in range(6):
+                painter.setBrush(QBrush(colors[i]))
+                painter.drawRect(cx-30 + i*10, cy-5, 8, 10)
+        else:
+            painter.setBrush(QBrush(QColor(60, 60, 60)))
+            for i in range(6):
+                painter.drawRect(cx-30 + i*10, cy-5, 8, 10)
+    
+    def draw_smart_socket(self, painter, cx, cy):
+        painter.setPen(QPen(QColor(100, 100, 100), 2))
+        painter.setBrush(QBrush(QColor(60, 60, 60)))
+        painter.drawRect(cx-20, cy-20, 40, 40)
+        
+        painter.setPen(QPen(QColor(80, 80, 80), 2))
+        painter.setBrush(QBrush(QColor(40, 40, 40)))
+        painter.drawRect(cx-15, cy-15, 30, 30)
+        
+        painter.setPen(QPen(QColor(100, 100, 100), 2))
+        painter.drawEllipse(cx-5, cy-5, 10, 10)
+        
+        if self.state:
+            painter.setPen(QPen(QColor(50, 200, 50), 2))
+            painter.drawLine(cx, cy-10, cx, cy+10)
+    
+    def draw_water_valve(self, painter, cx, cy):
+        painter.setPen(QPen(QColor(100, 150, 200), 2))
+        painter.setBrush(QBrush(QColor(50, 100, 150)))
+        painter.drawEllipse(cx-20, cy-20, 40, 40)
+        
+        painter.setPen(QPen(QColor(80, 130, 180), 2))
+        painter.drawRect(cx-8, cy-30, 16, 15)
+        
+        if self.state:
+            painter.setPen(QPen(QColor(150, 200, 255), 2))
+            for i in range(3):
+                offset = (self.water_drop_offset + i * 30) % 100
+                y_pos = cy + 10 + offset * 0.3
+                alpha = int(150 - offset * 1.5)
+                if alpha > 0:
+                    painter.setBrush(QBrush(QColor(150, 200, 255, alpha)))
+                    painter.drawEllipse(cx-3 + i*6, int(y_pos), 4, 6)
+    
+    def draw_default(self, painter, cx, cy):
+        painter.setPen(QPen(QColor(100, 100, 100), 2))
+        painter.setBrush(QBrush(QColor(60, 60, 60)))
+        painter.drawRect(cx-20, cy-20, 40, 40)
+        
+        painter.setPen(QPen(QColor(80, 80, 80), 1))
+        painter.drawText(cx-10, cy+5, "?")
     
     def stop_animation(self):
         self.animation_timer.stop()
@@ -960,7 +1398,11 @@ class MainWindow(QMainWindow):
             self.device_widgets[device].set_state(state)
     
     def on_device_toggle(self, device_id):
-        self.command_system.execute_command(device_id, 'toggle')
+        # 直接切换设备状态
+        self.state_manager.toggle_state(device_id)
+        # 播放点击声音
+        if self.sound_manager:
+            self.sound_manager.play_click()
     
     @pyqtSlot(str)
     def on_voice_detected(self, text):
