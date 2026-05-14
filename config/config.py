@@ -73,6 +73,12 @@ ERNIE_SPEECH_CONFIG = {
     'TTS_URL': 'https://tsn.baidu.com/text2audio'
 }
 
+PORCUPINE_CONFIG = {
+    'ACCESS_KEY': '',
+    'KEYWORDS': ['computer'],
+    'COOLDOWN_SECONDS': 3
+}
+
 WEATHER_CONFIG = {
     'API_KEY': BAIDU_ASR_CONFIG['API_KEY'],
     'URL': 'https://api.map.baidu.com/weather/v1/',

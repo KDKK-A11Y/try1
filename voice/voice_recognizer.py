@@ -8,8 +8,14 @@ import json
 import urllib
 import requests
 from PyQt5.QtCore import QObject, pyqtSignal
-from config.config import BAIDU_ASR_CONFIG, LANGUAGE_MODELS
+from config.config import BAIDU_ASR_CONFIG, LANGUAGE_MODELS, PORCUPINE_CONFIG
 from modules.smart_assistant import SmartAssistant
+
+try:
+    import pvporcupine
+    PORCUPINE_AVAILABLE = True
+except ImportError:
+    PORCUPINE_AVAILABLE = False
 
 class VoiceRecognizer(QObject):
     voice_detected = pyqtSignal(str)
@@ -52,6 +58,12 @@ class VoiceRecognizer(QObject):
         self._wake_listener_thread = None
         self._wake_audio_buffer = []
         self._wake_cooldown = 0
+        
+        self._porcupine = None
+        self._porcupine_keywords = PORCUPINE_CONFIG.get('KEYWORDS', ['computer'])
+        
+        self._auto_stop_timer = None
+        self._AUTO_STOP_DURATION = 3
         
         try:
             self._pyaudio_instance = pyaudio.PyAudio()
@@ -134,6 +146,9 @@ class VoiceRecognizer(QObject):
             )
             self._stream.start_stream()
             self.logger.info(f"录音流已启动，采样率: {self.RATE}Hz")
+            
+            self._start_auto_stop_timer()
+            
         except Exception as e:
             self.logger.error(f"录音启动失败: {str(e)}")
             self._is_recording = False
@@ -142,9 +157,26 @@ class VoiceRecognizer(QObject):
         
         return True
     
+    def _start_auto_stop_timer(self):
+        if self._auto_stop_timer:
+            self._auto_stop_timer.cancel()
+        
+        self._auto_stop_timer = threading.Timer(self._AUTO_STOP_DURATION, self._auto_stop_recording)
+        self._auto_stop_timer.start()
+        self.logger.info(f"自动停止定时器已启动，{self._AUTO_STOP_DURATION}秒后自动停止录音")
+    
+    def _auto_stop_recording(self):
+        if self._is_recording:
+            self.logger.info(f"录音已达{self._AUTO_STOP_DURATION}秒，自动停止")
+            self.stop_recording()
+    
     def stop_recording(self) -> bool:
         if not self._is_recording:
             return False
+        
+        if self._auto_stop_timer:
+            self._auto_stop_timer.cancel()
+            self._auto_stop_timer = None
         
         recording_duration = time.time() - self._recording_start_time
         self._is_recording = False
@@ -284,11 +316,41 @@ class VoiceRecognizer(QObject):
         
         self._wake_listener_active = True
         self._wake_audio_buffer = []
-        self.logger.info("唤醒监听已启动，说出唤醒词即可激活")
         
+        if PORCUPINE_AVAILABLE:
+            self.logger.info("使用 Porcupine 进行唤醒词检测")
+            if self._init_porcupine():
+                self._wake_listener_thread = threading.Thread(target=self._porcupine_wake_loop, daemon=True)
+                self._wake_listener_thread.start()
+                return True
+            else:
+                self.logger.warning("Porcupine 初始化失败，回退到云端检测")
+        
+        self.logger.info("唤醒监听已启动，说出唤醒词即可激活")
         self._wake_listener_thread = threading.Thread(target=self._wake_listener_loop, daemon=True)
         self._wake_listener_thread.start()
         return True
+    
+    def _init_porcupine(self):
+        try:
+            access_key = PORCUPINE_CONFIG.get('ACCESS_KEY', None)
+            
+            if access_key:
+                self._porcupine = pvporcupine.create(
+                    access_key=access_key,
+                    keywords=self._porcupine_keywords
+                )
+            else:
+                self._porcupine = pvporcupine.create(
+                    keywords=self._porcupine_keywords
+                )
+            
+            self.logger.info(f"Porcupine 初始化成功，关键词: {self._porcupine_keywords}")
+            return True
+        except Exception as e:
+            self.logger.error(f"Porcupine 初始化失败: {str(e)}")
+            self._porcupine = None
+            return False
     
     def stop_wake_listener(self):
         if not self._wake_listener_active:
@@ -304,6 +366,62 @@ class VoiceRecognizer(QObject):
             except:
                 pass
             self._wake_stream = None
+        
+        if self._porcupine:
+            try:
+                self._porcupine.delete()
+            except:
+                pass
+            self._porcupine = None
+    
+    def _porcupine_wake_loop(self):
+        if not self._porcupine or not self._pyaudio_instance:
+            return
+        
+        try:
+            porcupine_stream = self._pyaudio_instance.open(
+                rate=self._porcupine.sample_rate,
+                channels=1,
+                format=pyaudio.paInt16,
+                input=True,
+                frames_per_buffer=self._porcupine.frame_length,
+                stream_callback=self._porcupine_audio_callback
+            )
+            porcupine_stream.start_stream()
+            
+            while self._wake_listener_active:
+                time.sleep(0.1)
+            
+            porcupine_stream.stop_stream()
+            porcupine_stream.close()
+            
+        except Exception as e:
+            self.logger.error(f"Porcupine 唤醒监听异常: {str(e)}")
+            self._wake_listener_active = False
+    
+    def _porcupine_audio_callback(self, in_data, frame_count, time_info, status):
+        if not self._wake_listener_active or not self._porcupine:
+            return (in_data, pyaudio.paAbort)
+        
+        pcm = pvporcupine.convert_pcm(in_data)
+        
+        try:
+            keyword_index = self._porcupine.process(pcm)
+            
+            if keyword_index >= 0:
+                current_time = time.time()
+                if current_time >= self._wake_cooldown:
+                    self._wake_cooldown = current_time + PORCUPINE_CONFIG.get('COOLDOWN_SECONDS', 3)
+                    
+                    detected_keyword = self._porcupine_keywords[keyword_index] if keyword_index < len(self._porcupine_keywords) else "unknown"
+                    self.logger.info(f"Porcupine 检测到唤醒词: {detected_keyword}")
+                    self.wake_word_detected.emit(detected_keyword)
+                    self.start_recording()
+        
+        except Exception as e:
+            self.logger.error(f"Porcupine 处理异常: {str(e)}")
+        
+        return (in_data, pyaudio.paContinue)
     
     def _wake_listener_loop(self):
         try:
