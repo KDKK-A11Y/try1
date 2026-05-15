@@ -414,6 +414,49 @@ class VoiceprintRecognizer(QObject):
         """获取已注册的用户列表"""
         return list(self.voiceprints.keys())
     
+    def delete_voiceprint(self, user_id):
+        """删除指定用户的声纹"""
+        if user_id in self.voiceprints:
+            del self.voiceprints[user_id]
+            file_path = self.voiceprint_dir / f"{user_id}.npy"
+            if file_path.exists():
+                file_path.unlink()
+            print(f"🗑️ 已删除声纹: {user_id}")
+            return True
+        return False
+    
+    def rename_voiceprint(self, old_user_id, new_user_id):
+        """重命名声纹用户"""
+        if old_user_id not in self.voiceprints:
+            return False, "用户不存在"
+        
+        if new_user_id in self.voiceprints:
+            return False, "新用户名已存在"
+        
+        # 重命名内存中的声纹
+        feature = self.voiceprints.pop(old_user_id)
+        self.voiceprints[new_user_id] = feature
+        
+        # 重命名文件
+        old_file = self.voiceprint_dir / f"{old_user_id}.npy"
+        new_file = self.voiceprint_dir / f"{new_user_id}.npy"
+        if old_file.exists():
+            old_file.rename(new_file)
+        
+        print(f"✏️ 声纹已重命名: {old_user_id} -> {new_user_id}")
+        return True, "重命名成功"
+    
+    def clear_all_voiceprints(self):
+        """清空所有声纹"""
+        for user_id in list(self.voiceprints.keys()):
+            self.delete_voiceprint(user_id)
+        print("🗑️ 已清空所有声纹")
+        return True
+    
+    def get_voiceprint_count(self):
+        """获取声纹数量"""
+        return len(self.voiceprints)
+    
     def cleanup(self):
         """清理资源"""
         if self._pyaudio:

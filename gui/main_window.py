@@ -1,7 +1,8 @@
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QGridLayout, QLabel, QPushButton, QTextEdit,
                              QGroupBox, QFrame, QProgressBar, QSizePolicy, QComboBox,
-                             QInputDialog, QLineEdit, QScrollArea)
+                             QInputDialog, QLineEdit, QScrollArea, QDialog, QListWidget,
+                             QListWidgetItem, QMessageBox)
 from PyQt5.QtGui import QFont, QLinearGradient, QRadialGradient, QPalette, QBrush, QPainter, QColor, QPen
 from PyQt5.QtCore import Qt, QTimer, pyqtSlot, QRect, QPointF
 from config.config import DEVICE_NAMES, ROOMS, DEVICE_TYPES, DEFAULT_ROOM_DEVICES
@@ -342,20 +343,20 @@ class DeviceIcon(QWidget):
         
         painter.setPen(QPen(QColor(100, 100, 100), 2))
         painter.setBrush(QBrush(QColor(50, 50, 50)))
-        painter.drawRect(cx-30, cy-25, 60, 50)
+        painter.drawRect(-30, -25, 60, 50)
         
         painter.setPen(QPen(QColor(80, 80, 80), 1))
         for row in range(4):
             for col in range(6):
-                painter.drawRect(cx-25 + col*8, cy-20 + row*10, 5, 5)
+                painter.drawRect(-25 + col*8, -20 + row*10, 5, 5)
         
         if self.state:
-            glow = QRadialGradient(cx, cy, 40)
+            glow = QRadialGradient(0, 0, 40)
             glow.setColorAt(0, QColor(100, 150, 255, 20))
             glow.setColorAt(1, QColor(100, 150, 255, 0))
             painter.setBrush(QBrush(glow))
             painter.setPen(Qt.NoPen)
-            painter.drawEllipse(cx-35, cy-35, 70, 70)
+            painter.drawEllipse(-35, -35, 70, 70)
         
         painter.restore()
     
@@ -460,15 +461,15 @@ class DeviceIcon(QWidget):
         
         painter.setPen(QPen(QColor(100, 100, 100), 2))
         painter.setBrush(QBrush(QColor(80, 80, 80)))
-        painter.drawEllipse(cx-20, cy-15, 40, 30)
+        painter.drawEllipse(-20, -15, 40, 30)
         
         painter.setPen(QPen(QColor(120, 120, 120), 2))
         painter.setBrush(QBrush(QColor(100, 100, 100)))
-        painter.drawEllipse(cx-8, cy-18, 16, 8)
+        painter.drawEllipse(-8, -18, 16, 8)
         
         if self.state:
             painter.setPen(QPen(QColor(255, 100, 100), 2))
-            painter.drawArc(cx-15, cy-25, 30, 30, 0, 360 * 16)
+            painter.drawArc(-15, -25, 30, 30, 0, 360 * 16)
         
         painter.restore()
     
@@ -1347,6 +1348,27 @@ class MainWindow(QMainWindow):
         
         voiceprint_layout.addWidget(self.register_voiceprint_btn)
         voiceprint_layout.addWidget(self.recognize_voiceprint_btn)
+        
+        # 声纹管理按钮
+        self.manage_voiceprint_btn = QPushButton('📋 声纹管理')
+        self.manage_voiceprint_btn.setFixedHeight(42)
+        self.manage_voiceprint_btn.setFont(QFont('微软雅黑', 12, QFont.Bold))
+        self.manage_voiceprint_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #9664d9, stop:1 #7b4abd);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 20px;
+                box-shadow: 0 3px 10px rgba(123, 74, 189, 0.4);
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #a674e9, stop:1 #8b59cd);
+            }
+        """)
+        self.manage_voiceprint_btn.clicked.connect(self.on_manage_voiceprint)
+        voiceprint_layout.addWidget(self.manage_voiceprint_btn)
+        
         voiceprint_layout.addWidget(self.voiceprint_status)
         
         control_layout.addWidget(voiceprint_group)
@@ -1376,6 +1398,26 @@ class MainWindow(QMainWindow):
         self.wake_btn.setCheckable(True)
         self.wake_btn.clicked.connect(self.on_wake_toggled)
         control_layout.addWidget(self.wake_btn)
+        
+        # 手势绑定按钮
+        self.gesture_bind_btn = QPushButton('🤟 手势绑定')
+        self.gesture_bind_btn.setFixedHeight(42)
+        self.gesture_bind_btn.setFont(QFont('微软雅黑', 12, QFont.Bold))
+        self.gesture_bind_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4ad9d9, stop:1 #35bdbd);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 20px;
+                box-shadow: 0 3px 10px rgba(53, 189, 189, 0.4);
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5ae9e9, stop:1 #45cdcd);
+            }
+        """)
+        self.gesture_bind_btn.clicked.connect(self.on_gesture_binding)
+        control_layout.addWidget(self.gesture_bind_btn)
         
         info_label = QLabel("💡 提示：按住麦克风按钮说话，松开自动识别 | 说'管家管家'唤醒语音助手")
         info_label.setFont(QFont('微软雅黑', 10))
@@ -1549,8 +1591,8 @@ class MainWindow(QMainWindow):
         """处理唤醒的声纹验证结果"""
         self._wake_request_pending = False
         
-        if success and user_id == "master":
-            self.log_text.append(f"<span style='color:#4ad9a0;'>✅ [声纹]</span> 验证通过！相似度: {score:.2f}")
+        if success and user_id:
+            self.log_text.append(f"<span style='color:#4ad9a0;'>✅ [声纹]</span> 验证通过！{user_id}，相似度: {score:.2f}")
             success = self.voice_recognizer.start_wake_listener()
             if success:
                 self.wake_btn.setText('🔔 关闭语音唤醒')
@@ -1558,7 +1600,7 @@ class MainWindow(QMainWindow):
                 if self.sound_manager:
                     self.sound_manager.play_device_on()
         else:
-            self.log_text.append(f"<span style='color:#ff4a4a;'>❌ [声纹]</span> 验证失败，无法开启唤醒功能")
+            self.log_text.append(f"<span style='color:#ff4a4a;'>❌ [声纹]</span> 验证失败，无法开启唤醒功能，相似度: {score:.2f}")
             self.wake_btn.setChecked(False)
             if self.sound_manager:
                 self.sound_manager.play_device_off()
@@ -1658,11 +1700,15 @@ class MainWindow(QMainWindow):
     def on_voiceprint_registration_finished(self, success, message):
         """声纹注册完成"""
         if success:
-            self.log_text.append(f"<span style='color:#4ad9a0;'>✅ [声纹]</span> {message}您现在是管理员")
-            self.voiceprint_status.setText('声纹识别状态: 已注册')
+            user_id = self.voiceprint_recognizer._current_user_id
+            self.log_text.append(f"<span style='color:#4ad9a0;'>✅ [声纹]</span> {message}用户 '{user_id}' 声纹注册成功")
+            self.voiceprint_status.setText(f'声纹识别状态: 已注册 {user_id}')
             self.voiceprint_status.setStyleSheet("color: #4ad9a0;")
             if self.sound_manager:
                 self.sound_manager.play_device_on()
+            # 更新状态显示
+            user_count = self.voiceprint_recognizer.get_voiceprint_count()
+            self.voiceprint_status.setText(f'声纹识别状态: 已注册 {user_count} 个用户')
         else:
             self.log_text.append(f"<span style='color:#ff4a4a;'>❌ [声纹]</span> {message}")
             self.voiceprint_status.setText('声纹识别状态: 注册失败')
@@ -1681,9 +1727,9 @@ class MainWindow(QMainWindow):
             return
         
         # 普通声纹识别请求
-        if success and user_id == "master":
-            self.log_text.append(f"<span style='color:#4ad9a0;'>✅ [声纹]</span> 验证通过！欢迎回来，相似度: {score:.2f}")
-            self.voiceprint_status.setText(f'声纹识别状态: 已验证 ({score:.2f})')
+        if success and user_id:
+            self.log_text.append(f"<span style='color:#4ad9a0;'>✅ [声纹]</span> 验证通过！欢迎回来，{user_id}，相似度: {score:.2f}")
+            self.voiceprint_status.setText(f'声纹识别状态: 已验证 {user_id} ({score:.2f})')
             self.voiceprint_status.setStyleSheet("color: #4ad9a0;")
             if self.sound_manager:
                 self.sound_manager.play_device_on()
@@ -1691,7 +1737,7 @@ class MainWindow(QMainWindow):
             if self.voice_recognizer:
                 self.voice_recognizer.start_recording()
         else:
-            self.log_text.append(f"<span style='color:#ff4a4a;'>❌ [声纹]</span> 验证失败，未知用户，相似度: {score:.2f}")
+            self.log_text.append(f"<span style='color:#ff4a4a;'>❌ [声纹]</span> 验证失败，相似度: {score:.2f}，未达到阈值")
             self.voiceprint_status.setText('声纹识别状态: 未通过')
             self.voiceprint_status.setStyleSheet("color: #ff4a4a;")
             if self.sound_manager:
@@ -1776,6 +1822,11 @@ class MainWindow(QMainWindow):
             btn.setChecked(rid == room_id)
         
         self.current_room = room_id
+        
+        # 更新命令系统的当前房间（用于手势控制）
+        if self.command_system:
+            self.command_system.set_current_room(room_id)
+        
         self.load_room_devices(room_id)
     
     def on_add_room(self):
@@ -1883,3 +1934,548 @@ class MainWindow(QMainWindow):
                         if self.sound_manager:
                             self.sound_manager.play_device_off()
                     break
+    
+    def on_manage_voiceprint(self):
+        """打开声纹管理对话框"""
+        dialog = VoiceprintManagerDialog(self.voiceprint_recognizer, self)
+        dialog.exec_()
+        # 刷新状态显示
+        user_count = self.voiceprint_recognizer.get_voiceprint_count()
+        self.voiceprint_status.setText(f'声纹识别状态: 已注册 {user_count} 个用户')
+    
+    def on_gesture_binding(self):
+        """打开手势绑定对话框"""
+        dialog = GestureBindingDialog(self.command_system, self.device_manager, self.state_manager, self)
+        dialog.exec_()
+
+
+class GestureBindingDialog(QDialog):
+    """手势绑定对话框"""
+    
+    def __init__(self, command_system, device_manager, state_manager, parent=None):
+        super().__init__(parent)
+        self.command_system = command_system
+        self.device_manager = device_manager
+        self.state_manager = state_manager
+        self.setWindowTitle('🤟 手势绑定')
+        self.setFixedSize(500, 450)
+        self.setStyleSheet("""
+            QDialog {
+                background: rgba(30, 30, 50, 0.95);
+                border-radius: 15px;
+            }
+        """)
+        
+        self.init_ui()
+    
+    def init_ui(self):
+        layout = QVBoxLayout()
+        layout.setSpacing(15)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        # 标题
+        title_label = QLabel('🤟 手势绑定设置')
+        title_label.setFont(QFont('微软雅黑', 16, QFont.Bold))
+        title_label.setStyleSheet("color: #4ad9d9;")
+        title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
+        
+        # 手势列表
+        gesture_layout = QGridLayout()
+        gesture_layout.setSpacing(10)
+        
+        self.gesture_buttons = {}
+        gestures = ['one', 'two', 'three', 'four', 'five']
+        gesture_names = {'one': '1指', 'two': '2指', 'three': '3指', 'four': '4指', 'five': '5指'}
+        
+        for i, gesture in enumerate(gestures):
+            btn = QPushButton(gesture_names[gesture])
+            btn.setFixedSize(80, 45)
+            btn.setFont(QFont('微软雅黑', 12, QFont.Bold))
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4a90d9, stop:1 #357abd);
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5a9fe9, stop:1 #4589cd);
+                }
+                QPushButton:checked {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4CAF50, stop:1 #388E3C);
+                }
+            """)
+            btn.setCheckable(True)
+            btn.clicked.connect(lambda checked, g=gesture: self.on_gesture_selected(g))
+            self.gesture_buttons[gesture] = btn
+            
+            # 当前绑定显示
+            bindings = self.command_system.get_gesture_bindings()
+            current_bind = bindings.get(gesture, '未绑定')
+            bind_label = QLabel(f"→ {current_bind if current_bind != '未绑定' else '未绑定'}")
+            bind_label.setFont(QFont('微软雅黑', 11))
+            bind_label.setStyleSheet("color: #aaa;")
+            
+            gesture_layout.addWidget(btn, i, 0)
+            gesture_layout.addWidget(bind_label, i, 1)
+        
+        layout.addLayout(gesture_layout)
+        
+        # 设备选择
+        device_group = QGroupBox('选择要绑定的设备')
+        device_group.setStyleSheet("""
+            QGroupBox {
+                border: 2px solid rgba(100,150,255,0.3);
+                border-radius: 12px;
+                padding: 15px;
+                color: #6496ff;
+                font-size: 14px;
+                font-weight: bold;
+                background: rgba(100,150,255,0.03);
+                margin-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 0 10px 0 10px;
+            }
+        """)
+        device_layout = QVBoxLayout(device_group)
+        
+        self.device_combo = QComboBox()
+        self.device_combo.setFont(QFont('微软雅黑', 11))
+        self.device_combo.setStyleSheet("""
+            QComboBox {
+                background: rgba(255,255,255,0.1);
+                color: white;
+                border: 1px solid rgba(255,255,255,0.2);
+                border-radius: 8px;
+                padding: 8px 12px;
+                min-width: 200px;
+            }
+            QComboBox QAbstractItemView {
+                background: #2a2a4a;
+                color: white;
+                border: 1px solid rgba(255,255,255,0.2);
+                border-radius: 8px;
+            }
+        """)
+        self.load_devices()
+        device_layout.addWidget(self.device_combo)
+        
+        layout.addWidget(device_group)
+        
+        # 按钮区域
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(15)
+        
+        bind_btn = QPushButton('✅ 绑定')
+        bind_btn.setFixedHeight(40)
+        bind_btn.setFont(QFont('微软雅黑', 12, QFont.Bold))
+        bind_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4CAF50, stop:1 #388E3C);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 24px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5CBF60, stop:1 #489E4C);
+            }
+        """)
+        bind_btn.clicked.connect(self.on_bind)
+        button_layout.addWidget(bind_btn)
+        
+        clear_btn = QPushButton('🗑️ 清除绑定')
+        clear_btn.setFixedHeight(40)
+        clear_btn.setFont(QFont('微软雅黑', 12, QFont.Bold))
+        clear_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #d94a4a, stop:1 #bd3535);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 20px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e95a5a, stop:1 #cd4545);
+            }
+        """)
+        clear_btn.clicked.connect(self.on_clear)
+        button_layout.addWidget(clear_btn)
+        
+        clear_all_btn = QPushButton('🗑️ 清除全部')
+        clear_all_btn.setFixedHeight(40)
+        clear_all_btn.setFont(QFont('微软雅黑', 12, QFont.Bold))
+        clear_all_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #666, stop:1 #444);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 20px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #777, stop:1 #555);
+            }
+        """)
+        clear_all_btn.clicked.connect(self.on_clear_all)
+        button_layout.addWidget(clear_all_btn)
+        
+        layout.addLayout(button_layout)
+        
+        self.setLayout(layout)
+        
+        self.selected_gesture = None
+    
+    def load_devices(self):
+        """加载所有设备"""
+        self.device_combo.clear()
+        
+        # 获取所有设备
+        all_devices = []
+        
+        # 默认房间设备
+        from config.config import ROOMS, DEFAULT_ROOM_DEVICES, DEVICE_TYPES
+        
+        for room_id, devices in DEFAULT_ROOM_DEVICES.items():
+            room_name = ROOMS.get(room_id, {}).get('name', room_id)
+            for device_type in devices:
+                device_name = DEVICE_TYPES.get(device_type, {}).get('name', device_type)
+                device_key = f"{room_id}_{device_type}"
+                all_devices.append((room_name, device_name, device_key))
+        
+        # 自定义房间设备
+        if self.device_manager:
+            custom_rooms = self.device_manager.get_custom_rooms()
+            for room_id in custom_rooms:
+                room_info = self.device_manager.get_room_info(room_id)
+                room_name = room_info.get('name', room_id)
+                room_devices = self.device_manager.get_room_devices(room_id)
+                for device_type in room_devices:
+                    device_name = DEVICE_TYPES.get(device_type, {}).get('name', device_type)
+                    device_key = f"{room_id}_{device_type}"
+                    all_devices.append((room_name, device_name, device_key))
+        
+        # 添加到下拉框
+        for room_name, device_name, device_key in all_devices:
+            self.device_combo.addItem(f"{room_name} - {device_name}", device_key)
+    
+    def on_gesture_selected(self, gesture):
+        """手势选择"""
+        # 取消其他手势的选中状态
+        for g, btn in self.gesture_buttons.items():
+            btn.setChecked(g == gesture)
+        
+        self.selected_gesture = gesture
+    
+    def on_bind(self):
+        """绑定手势"""
+        if not self.selected_gesture:
+            QMessageBox.warning(self, '提示', '请先选择一个手势！')
+            return
+        
+        device_key = self.device_combo.currentData()
+        if not device_key:
+            QMessageBox.warning(self, '提示', '请选择一个设备！')
+            return
+        
+        success, message = self.command_system.set_gesture_binding(self.selected_gesture, device_key)
+        
+        if success:
+            QMessageBox.information(self, '成功', message)
+            # 更新显示
+            self.load_devices()
+            # 更新主窗口日志
+            if self.parent():
+                gesture_names = {'one': '1指', 'two': '2指', 'three': '3指', 'four': '4指', 'five': '5指'}
+                self.parent().log_text.append(f"<span style='color:#4ad9d9;'>🤟 [手势]</span> {gesture_names.get(self.selected_gesture)} 绑定到 {device_key}")
+        else:
+            QMessageBox.warning(self, '失败', message)
+    
+    def on_clear(self):
+        """清除当前手势绑定"""
+        if not self.selected_gesture:
+            QMessageBox.warning(self, '提示', '请先选择一个手势！')
+            return
+        
+        bindings = self.command_system.get_gesture_bindings()
+        if self.selected_gesture not in bindings:
+            QMessageBox.warning(self, '提示', '该手势没有绑定！')
+            return
+        
+        success, message = self.command_system.remove_gesture_binding(self.selected_gesture)
+        
+        if success:
+            QMessageBox.information(self, '成功', message)
+            # 更新主窗口日志
+            if self.parent():
+                gesture_names = {'one': '1指', 'two': '2指', 'three': '3指', 'four': '4指', 'five': '5指'}
+                self.parent().log_text.append(f"<span style='color:#ff9900;'>🤟 [手势]</span> 已清除 {gesture_names.get(self.selected_gesture)} 的绑定")
+        else:
+            QMessageBox.warning(self, '失败', message)
+    
+    def on_clear_all(self):
+        """清除所有手势绑定"""
+        bindings = self.command_system.get_gesture_bindings()
+        if not bindings:
+            QMessageBox.information(self, '提示', '没有可清除的绑定')
+            return
+        
+        reply = QMessageBox.question(self, '确认清除', '确定要清除所有手势绑定吗？',
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:
+            for gesture in list(bindings.keys()):
+                self.command_system.remove_gesture_binding(gesture)
+            
+            QMessageBox.information(self, '成功', '已清除所有手势绑定')
+            if self.parent():
+                self.parent().log_text.append(f"<span style='color:#ff9900;'>🤟 [手势]</span> 已清除所有手势绑定")
+
+
+class VoiceprintManagerDialog(QDialog):
+    """声纹管理对话框"""
+    
+    def __init__(self, voiceprint_recognizer, parent=None):
+        super().__init__(parent)
+        self.voiceprint_recognizer = voiceprint_recognizer
+        self.setWindowTitle('📋 声纹管理')
+        self.setFixedSize(450, 400)
+        self.setStyleSheet("""
+            QDialog {
+                background: rgba(30, 30, 50, 0.95);
+                border-radius: 15px;
+            }
+        """)
+        
+        self.init_ui()
+    
+    def init_ui(self):
+        layout = QVBoxLayout()
+        layout.setSpacing(15)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        # 标题
+        title_label = QLabel('🔊 声纹管理')
+        title_label.setFont(QFont('微软雅黑', 16, QFont.Bold))
+        title_label.setStyleSheet("color: #6496ff;")
+        title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
+        
+        # 声纹列表
+        self.voiceprint_list = QListWidget()
+        self.voiceprint_list.setFont(QFont('微软雅黑', 12))
+        self.voiceprint_list.setStyleSheet("""
+            QListWidget {
+                background: rgba(255,255,255,0.05);
+                border: 1px solid rgba(255,255,255,0.1);
+                border-radius: 10px;
+                color: white;
+                padding: 10px;
+            }
+            QListWidget::item {
+                padding: 10px;
+                border-radius: 8px;
+                margin-bottom: 5px;
+            }
+            QListWidget::item:hover {
+                background: rgba(100, 150, 255, 0.2);
+            }
+            QListWidget::item:selected {
+                background: rgba(100, 150, 255, 0.4);
+            }
+        """)
+        layout.addWidget(self.voiceprint_list)
+        
+        # 统计信息
+        self.stats_label = QLabel()
+        self.stats_label.setFont(QFont('微软雅黑', 11))
+        self.stats_label.setStyleSheet("color: #aaa;")
+        self.stats_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.stats_label)
+        
+        # 按钮区域
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(10)
+        
+        # 添加按钮
+        add_btn = QPushButton('➕ 添加用户')
+        add_btn.setFixedHeight(40)
+        add_btn.setFont(QFont('微软雅黑', 11, QFont.Bold))
+        add_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4a90d9, stop:1 #357abd);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 16px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5a9fe9, stop:1 #4589cd);
+            }
+        """)
+        add_btn.clicked.connect(self.on_add_user)
+        button_layout.addWidget(add_btn)
+        
+        # 重命名按钮
+        rename_btn = QPushButton('✏️ 重命名')
+        rename_btn.setFixedHeight(40)
+        rename_btn.setFont(QFont('微软雅黑', 11, QFont.Bold))
+        rename_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #9664d9, stop:1 #7b4abd);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 16px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #a674e9, stop:1 #8b59cd);
+            }
+        """)
+        rename_btn.clicked.connect(self.on_rename_user)
+        button_layout.addWidget(rename_btn)
+        
+        # 删除按钮
+        delete_btn = QPushButton('🗑️ 删除')
+        delete_btn.setFixedHeight(40)
+        delete_btn.setFont(QFont('微软雅黑', 11, QFont.Bold))
+        delete_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #d94a4a, stop:1 #bd3535);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 16px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e95a5a, stop:1 #cd4545);
+            }
+        """)
+        delete_btn.clicked.connect(self.on_delete_user)
+        button_layout.addWidget(delete_btn)
+        
+        # 清空按钮
+        clear_btn = QPushButton('🗑️ 清空全部')
+        clear_btn.setFixedHeight(40)
+        clear_btn.setFont(QFont('微软雅黑', 11, QFont.Bold))
+        clear_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #666, stop:1 #444);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 16px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #777, stop:1 #555);
+            }
+        """)
+        clear_btn.clicked.connect(self.on_clear_all)
+        button_layout.addWidget(clear_btn)
+        
+        layout.addLayout(button_layout)
+        
+        self.setLayout(layout)
+        self.refresh_list()
+    
+    def refresh_list(self):
+        """刷新声纹列表"""
+        self.voiceprint_list.clear()
+        users = self.voiceprint_recognizer.get_registered_users()
+        
+        for user_id in sorted(users):
+            item = QListWidgetItem(f'👤 {user_id}')
+            item.setFlags(item.flags() | Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            self.voiceprint_list.addItem(item)
+        
+        count = len(users)
+        self.stats_label.setText(f'已注册 {count} 个声纹用户')
+    
+    def on_add_user(self):
+        """添加新用户"""
+        user_id, ok = QInputDialog.getText(self, '添加用户', '请输入用户名:', QLineEdit.Normal, '')
+        
+        if ok and user_id.strip():
+            user_id = user_id.strip()
+            # 检查是否已存在
+            if user_id in self.voiceprint_recognizer.get_registered_users():
+                QMessageBox.warning(self, '提示', '该用户名已存在！')
+                return
+            
+            # 开始注册声纹
+            self.parent().log_text.append(f"<span style='color:#6496ff;'>🔊 [声纹]</span> 准备为用户 '{user_id}' 注册声纹...")
+            self.close()
+            self.parent().register_voiceprint_btn.setEnabled(False)
+            self.parent().recognize_voiceprint_btn.setEnabled(False)
+            self.voiceprint_recognizer.register_voiceprint_async(user_id)
+    
+    def on_rename_user(self):
+        """重命名用户"""
+        selected_items = self.voiceprint_list.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, '提示', '请先选择一个用户！')
+            return
+        
+        old_user_id = selected_items[0].text().replace('👤 ', '')
+        new_user_id, ok = QInputDialog.getText(self, '重命名', '请输入新用户名:', QLineEdit.Normal, old_user_id)
+        
+        if ok and new_user_id.strip():
+            new_user_id = new_user_id.strip()
+            success, message = self.voiceprint_recognizer.rename_voiceprint(old_user_id, new_user_id)
+            
+            if success:
+                QMessageBox.information(self, '成功', message)
+                self.refresh_list()
+                # 更新主窗口状态
+                if self.parent():
+                    self.parent().log_text.append(f"<span style='color:#ff9900;'>✏️ [声纹]</span> 用户 '{old_user_id}' 已重命名为 '{new_user_id}'")
+            else:
+                QMessageBox.warning(self, '失败', message)
+    
+    def on_delete_user(self):
+        """删除用户"""
+        selected_items = self.voiceprint_list.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, '提示', '请先选择一个用户！')
+            return
+        
+        user_id = selected_items[0].text().replace('👤 ', '')
+        
+        reply = QMessageBox.question(self, '确认删除', f'确定要删除用户 "{user_id}" 的声纹吗？',
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:
+            success = self.voiceprint_recognizer.delete_voiceprint(user_id)
+            if success:
+                QMessageBox.information(self, '成功', f'已删除用户 "{user_id}" 的声纹')
+                self.refresh_list()
+                # 更新主窗口状态
+                if self.parent():
+                    user_count = self.voiceprint_recognizer.get_voiceprint_count()
+                    self.parent().voiceprint_status.setText(f'声纹识别状态: 已注册 {user_count} 个用户')
+                    self.parent().log_text.append(f"<span style='color:#ff9900;'>🗑️ [声纹]</span> 已删除用户 '{user_id}' 的声纹")
+            else:
+                QMessageBox.warning(self, '失败', '删除失败')
+    
+    def on_clear_all(self):
+        """清空所有声纹"""
+        count = len(self.voiceprint_recognizer.get_registered_users())
+        if count == 0:
+            QMessageBox.information(self, '提示', '没有可删除的声纹')
+            return
+        
+        reply = QMessageBox.question(self, '确认清空', f'确定要清空所有 {count} 个声纹吗？此操作不可恢复！',
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:
+            self.voiceprint_recognizer.clear_all_voiceprints()
+            QMessageBox.information(self, '成功', '已清空所有声纹')
+            self.refresh_list()
+            # 更新主窗口状态
+            if self.parent():
+                self.parent().voiceprint_status.setText('声纹识别状态: 已注册 0 个用户')
+                self.parent().log_text.append(f"<span style='color:#ff9900;'>🗑️ [声纹]</span> 已清空所有声纹")

@@ -256,7 +256,9 @@
     "garage": [
       "light",
       "smart_lock",
-      "camera"
+      "camera",
+      "smart_socket",
+      "rgb_strip"
     ],
     "拉拉": [],
     "asd": [

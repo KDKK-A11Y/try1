@@ -243,7 +243,7 @@ ROOM_COMMANDS = {
     }
 }
 
-# 手势映射
+# 手势映射（默认映射到设备类型）
 GESTURE_DEVICE_MAP = {
     'one': 'light',
     'two': 'aircon',
@@ -253,6 +253,19 @@ GESTURE_DEVICE_MAP = {
     'six': 'speaker',
     'seven': 'purifier',
     'eight': 'smart_lock'
+}
+
+# 自定义手势绑定（绑定到特定设备，优先级高于默认映射）
+# 格式: '手势': '设备ID'，例如: 'one': 'living_light'
+GESTURE_CUSTOM_BINDINGS = {}
+
+# 手势名称映射
+GESTURE_NAMES = {
+    'one': '1指',
+    'two': '2指',
+    'three': '3指',
+    'four': '4指',
+    'five': '5指'
 }
 
 # 初始设备状态

@@ -1,4 +1,6 @@
-from config.config import DEVICE_COMMANDS, DEVICE_NAMES, GESTURE_DEVICE_MAP, ROOM_COMMANDS, ROOMS, DEFAULT_ROOM_DEVICES, DEVICE_TYPES
+from config.config import DEVICE_COMMANDS, DEVICE_NAMES, GESTURE_DEVICE_MAP, GESTURE_CUSTOM_BINDINGS, GESTURE_NAMES, ROOM_COMMANDS, ROOMS, DEFAULT_ROOM_DEVICES, DEVICE_TYPES
+import json
+from pathlib import Path
 import re
 
 class CommandSystem:
@@ -8,6 +10,9 @@ class CommandSystem:
         self.device_manager = device_manager
         self.command_history = []
         self.gesture_device_map = GESTURE_DEVICE_MAP
+        self.gesture_custom_bindings = {}
+        self.custom_bindings_path = Path("config/gesture_bindings.json")
+        self.load_gesture_bindings()
         
     def parse_command(self, command_text):
         """解析命令文本，返回(设备类型, 动作, 房间ID)"""
@@ -385,18 +390,100 @@ class CommandSystem:
     
     def execute_gesture_command(self, gesture_type):
         """执行手势命令"""
+        # 首先检查自定义手势绑定（优先级最高）
+        if gesture_type in self.gesture_custom_bindings:
+            device_key = self.gesture_custom_bindings[gesture_type]
+            device_type = device_key.split('_')[1]
+            current_state = self.state_manager.get_state(device_key)
+            action = 'off' if current_state else 'on'
+            room_id = device_key.split('_')[0]
+            self.logger.info(f"使用自定义手势绑定: {GESTURE_NAMES.get(gesture_type, gesture_type)} -> {device_key}")
+            return self._execute_device_command(device_type, action, room_id)
+        
+        # 使用默认手势映射
         if gesture_type in self.gesture_device_map:
             device_type = self.gesture_device_map[gesture_type]
+            device_key = None
             
-            # 查找第一个有该设备的房间
-            for room_id, devices in DEFAULT_ROOM_DEVICES.items():
-                if device_type in devices:
-                    device_key = f"{room_id}_{device_type}"
-                    current_state = self.state_manager.get_state(device_key)
-                    action = 'off' if current_state else 'on'
-                    return self._execute_device_command(device_type, action, room_id)
+            # 优先控制当前房间的设备
+            if hasattr(self, 'current_room') and self.current_room:
+                room_devices = []
+                if self.current_room in DEFAULT_ROOM_DEVICES:
+                    room_devices = DEFAULT_ROOM_DEVICES[self.current_room]
+                
+                if self.device_manager:
+                    custom_devices = self.device_manager.get_room_devices(self.current_room)
+                    room_devices.extend(custom_devices)
+                
+                if device_type in room_devices:
+                    device_key = f"{self.current_room}_{device_type}"
+            else:
+                # 查找第一个有该设备的房间
+                for room_id, devices in DEFAULT_ROOM_DEVICES.items():
+                    if device_type in devices:
+                        device_key = f"{room_id}_{device_type}"
+                        break
+                
+                # 如果没找到，检查自定义房间
+                if not device_key and self.device_manager:
+                    for room_id in self.device_manager.get_custom_rooms():
+                        room_devices = self.device_manager.get_room_devices(room_id)
+                        if device_type in room_devices:
+                            device_key = f"{room_id}_{device_type}"
+                            break
+            
+            if device_key:
+                current_state = self.state_manager.get_state(device_key)
+                action = 'off' if current_state else 'on'
+                return self._execute_device_command(device_type, action, device_key.split('_')[0])
         
         return False, "未识别的手势"
+    
+    def set_current_room(self, room_id):
+        """设置当前房间（用于手势控制）"""
+        self.current_room = room_id
+    
+    def load_gesture_bindings(self):
+        """加载自定义手势绑定"""
+        if self.custom_bindings_path.exists():
+            try:
+                with open(self.custom_bindings_path, 'r', encoding='utf-8') as f:
+                    self.gesture_custom_bindings = json.load(f)
+                self.logger.info(f"已加载 {len(self.gesture_custom_bindings)} 个自定义手势绑定")
+            except Exception as e:
+                self.logger.error(f"加载手势绑定失败: {e}")
+                self.gesture_custom_bindings = {}
+    
+    def save_gesture_bindings(self):
+        """保存自定义手势绑定"""
+        try:
+            with open(self.custom_bindings_path, 'w', encoding='utf-8') as f:
+                json.dump(self.gesture_custom_bindings, f, ensure_ascii=False, indent=2)
+            self.logger.info("手势绑定已保存")
+        except Exception as e:
+            self.logger.error(f"保存手势绑定失败: {e}")
+    
+    def set_gesture_binding(self, gesture, device_key):
+        """设置手势绑定"""
+        if gesture in ['one', 'two', 'three', 'four', 'five']:
+            self.gesture_custom_bindings[gesture] = device_key
+            self.save_gesture_bindings()
+            self.logger.info(f"手势绑定: {GESTURE_NAMES.get(gesture, gesture)} -> {device_key}")
+            return True, f"手势绑定成功: {GESTURE_NAMES.get(gesture, gesture)} -> {device_key}"
+        return False, "无效的手势"
+    
+    def remove_gesture_binding(self, gesture):
+        """移除手势绑定"""
+        if gesture in self.gesture_custom_bindings:
+            del self.gesture_custom_bindings[gesture]
+            self.save_gesture_bindings()
+            self.logger.info(f"已移除手势绑定: {GESTURE_NAMES.get(gesture, gesture)}")
+            return True, f"已移除手势绑定: {GESTURE_NAMES.get(gesture, gesture)}"
+        return False, "该手势没有绑定"
+    
+    def get_gesture_bindings(self):
+        """获取所有手势绑定"""
+        return self.gesture_custom_bindings.copy()
     
     def get_active_device(self):
         """获取一个活跃设备"""
