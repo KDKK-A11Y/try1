@@ -17,50 +17,174 @@ ROOMS = {
 # 设备类型配置
 DEVICE_TYPES = {
     # 照明类
-    'light': {'name': '灯', 'icon': '💡', 'category': 'lighting', 'power_consumption': 15},
-    'rgb_strip': {'name': '灯带', 'icon': '🌈', 'category': 'lighting', 'power_consumption': 20},
+    'light': {
+        'name': '灯', 'icon': '💡', 'category': 'lighting', 'power_consumption': 15,
+        'controls': {
+            'brightness': {'type': 'slider', 'label': '亮度', 'min': 0, 'max': 100, 'default': 80, 'unit': '%'}
+        }
+    },
+    'rgb_strip': {
+        'name': '灯带', 'icon': '🌈', 'category': 'lighting', 'power_consumption': 20,
+        'controls': {
+            'brightness': {'type': 'slider', 'label': '亮度', 'min': 0, 'max': 100, 'default': 80, 'unit': '%'},
+            'mode': {'type': 'combo', 'label': '模式', 'options': ['静态', '呼吸', '彩虹', '闪烁'], 'default': '静态'}
+        }
+    },
     
     # 气候类
-    'aircon': {'name': '空调', 'icon': '❄️', 'category': 'climate', 'power_consumption': 1500},
-    'fan': {'name': '风扇', 'icon': '🌀', 'category': 'climate', 'power_consumption': 50},
-    'heater': {'name': '暖气', 'icon': '🔥', 'category': 'climate', 'power_consumption': 2000},
-    'humidifier': {'name': '加湿器', 'icon': '💧', 'category': 'climate', 'power_consumption': 40},
-    'dehumidifier': {'name': '除湿机', 'icon': '🍃', 'category': 'climate', 'power_consumption': 300},
-    'purifier': {'name': '空气净化器', 'icon': '🌬️', 'category': 'climate', 'power_consumption': 60},
-    'air_purifier': {'name': '新风系统', 'icon': '💨', 'category': 'climate', 'power_consumption': 120},
+    'aircon': {
+        'name': '空调', 'icon': '❄️', 'category': 'climate', 'power_consumption': 1500,
+        'controls': {
+            'temperature': {'type': 'slider', 'label': '温度', 'min': 16, 'max': 30, 'default': 26, 'unit': '°C'},
+            'mode': {'type': 'combo', 'label': '模式', 'options': ['制冷', '制热', '除湿', '自动', '送风'], 'default': '制冷'},
+            'fan_speed': {'type': 'combo', 'label': '风速', 'options': ['静音', '低', '中', '高', '自动'], 'default': '自动'}
+        }
+    },
+    'fan': {
+        'name': '风扇', 'icon': '🌀', 'category': 'climate', 'power_consumption': 50,
+        'controls': {
+            'fan_speed': {'type': 'combo', 'label': '风速', 'options': ['关', '低', '中', '高'], 'default': '中'},
+            'oscillate': {'type': 'toggle', 'label': '摇头', 'default': False}
+        }
+    },
+    'heater': {
+        'name': '暖气', 'icon': '🔥', 'category': 'climate', 'power_consumption': 2000,
+        'controls': {
+            'temperature': {'type': 'slider', 'label': '温度', 'min': 10, 'max': 30, 'default': 22, 'unit': '°C'}
+        }
+    },
+    'humidifier': {
+        'name': '加湿器', 'icon': '💧', 'category': 'climate', 'power_consumption': 40,
+        'controls': {
+            'humidity': {'type': 'slider', 'label': '湿度', 'min': 30, 'max': 80, 'default': 50, 'unit': '%'},
+            'level': {'type': 'combo', 'label': '档位', 'options': ['低', '中', '高'], 'default': '中'}
+        }
+    },
+    'dehumidifier': {
+        'name': '除湿机', 'icon': '🍃', 'category': 'climate', 'power_consumption': 300,
+        'controls': {
+            'humidity': {'type': 'slider', 'label': '目标湿度', 'min': 30, 'max': 60, 'default': 45, 'unit': '%'}
+        }
+    },
+    'purifier': {
+        'name': '空气净化器', 'icon': '🌬️', 'category': 'climate', 'power_consumption': 60,
+        'controls': {
+            'mode': {'type': 'combo', 'label': '模式', 'options': ['自动', '静音', '快速', '强力'], 'default': '自动'}
+        }
+    },
+    'air_purifier': {
+        'name': '新风系统', 'icon': '💨', 'category': 'climate', 'power_consumption': 120,
+        'controls': {
+            'mode': {'type': 'combo', 'label': '模式', 'options': ['自动', '低速', '中速', '高速'], 'default': '自动'}
+        }
+    },
     
     # 娱乐类
-    'tv': {'name': '电视', 'icon': '📺', 'category': 'entertainment', 'power_consumption': 100},
-    'speaker': {'name': '音响', 'icon': '🔊', 'category': 'entertainment', 'power_consumption': 80},
-    'projector': {'name': '投影仪', 'icon': '📽️', 'category': 'entertainment', 'power_consumption': 200},
+    'tv': {
+        'name': '电视', 'icon': '📺', 'category': 'entertainment', 'power_consumption': 100,
+        'controls': {
+            'volume': {'type': 'slider', 'label': '音量', 'min': 0, 'max': 100, 'default': 30, 'unit': '%'},
+            'channel': {'type': 'number', 'label': '频道', 'min': 1, 'max': 999, 'default': 1}
+        }
+    },
+    'speaker': {
+        'name': '音响', 'icon': '🔊', 'category': 'entertainment', 'power_consumption': 80,
+        'controls': {
+            'volume': {'type': 'slider', 'label': '音量', 'min': 0, 'max': 100, 'default': 30, 'unit': '%'},
+            'bass': {'type': 'slider', 'label': '低音', 'min': 0, 'max': 100, 'default': 50, 'unit': '%'},
+            'treble': {'type': 'slider', 'label': '高音', 'min': 0, 'max': 100, 'default': 50, 'unit': '%'}
+        }
+    },
+    'projector': {
+        'name': '投影仪', 'icon': '📽️', 'category': 'entertainment', 'power_consumption': 200,
+        'controls': {
+            'brightness': {'type': 'slider', 'label': '亮度', 'min': 0, 'max': 100, 'default': 70, 'unit': '%'},
+            'focus': {'type': 'slider', 'label': '对焦', 'min': 0, 'max': 100, 'default': 50, 'unit': '%'}
+        }
+    },
     
     # 安全类
-    'smart_lock': {'name': '智能门锁', 'icon': '🔒', 'category': 'security', 'power_consumption': 5},
-    'camera': {'name': '摄像头', 'icon': '📷', 'category': 'security', 'power_consumption': 10},
-    'door_sensor': {'name': '门磁传感器', 'icon': '🚪', 'category': 'security', 'power_consumption': 2},
-    'motion_sensor': {'name': '人体传感器', 'icon': '👤', 'category': 'security', 'power_consumption': 3},
-    'smoke_detector': {'name': '烟雾报警器', 'icon': '🚨', 'category': 'security', 'power_consumption': 1},
+    'smart_lock': {'name': '智能门锁', 'icon': '🔒', 'category': 'security', 'power_consumption': 5, 'controls': {}},
+    'camera': {
+        'name': '摄像头', 'icon': '📷', 'category': 'security', 'power_consumption': 10,
+        'controls': {
+            'recording': {'type': 'toggle', 'label': '录制', 'default': True},
+            'motion_detection': {'type': 'toggle', 'label': '移动侦测', 'default': True}
+        }
+    },
+    'door_sensor': {'name': '门磁传感器', 'icon': '🚪', 'category': 'security', 'power_consumption': 2, 'controls': {}},
+    'motion_sensor': {'name': '人体传感器', 'icon': '👤', 'category': 'security', 'power_consumption': 3, 'controls': {}},
+    'smoke_detector': {'name': '烟雾报警器', 'icon': '🚨', 'category': 'security', 'power_consumption': 1, 'controls': {}},
     
     # 家电类
-    'water_heater': {'name': '热水器', 'icon': '🛁', 'category': 'appliance', 'power_consumption': 1500},
-    'oven': {'name': '烤箱', 'icon': '🍞', 'category': 'appliance', 'power_consumption': 2000},
-    'microwave': {'name': '微波炉', 'icon': '🧊', 'category': 'appliance', 'power_consumption': 800},
-    'refrigerator': {'name': '冰箱', 'icon': '❄️', 'category': 'appliance', 'power_consumption': 150},
-    'washing_machine': {'name': '洗衣机', 'icon': '👕', 'category': 'appliance', 'power_consumption': 500},
-    'dishwasher': {'name': '洗碗机', 'icon': '🍽️', 'category': 'appliance', 'power_consumption': 1200},
-    'coffee_maker': {'name': '咖啡机', 'icon': '☕', 'category': 'appliance', 'power_consumption': 800},
+    'water_heater': {
+        'name': '热水器', 'icon': '🛁', 'category': 'appliance', 'power_consumption': 1500,
+        'controls': {
+            'temperature': {'type': 'slider', 'label': '温度', 'min': 40, 'max': 75, 'default': 55, 'unit': '°C'},
+            'mode': {'type': 'combo', 'label': '模式', 'options': ['即时加热', '定时', '节能'], 'default': '即时加热'}
+        }
+    },
+    'oven': {
+        'name': '烤箱', 'icon': '🍞', 'category': 'appliance', 'power_consumption': 2000,
+        'controls': {
+            'temperature': {'type': 'slider', 'label': '温度', 'min': 50, 'max': 250, 'default': 180, 'unit': '°C'},
+            'timer': {'type': 'number', 'label': '定时(分钟)', 'min': 1, 'max': 120, 'default': 30}
+        }
+    },
+    'microwave': {
+        'name': '微波炉', 'icon': '🧊', 'category': 'appliance', 'power_consumption': 800,
+        'controls': {
+            'power': {'type': 'slider', 'label': '功率', 'min': 10, 'max': 100, 'default': 80, 'unit': '%'},
+            'timer': {'type': 'number', 'label': '时间(秒)', 'min': 1, 'max': 999, 'default': 60}
+        }
+    },
+    'refrigerator': {
+        'name': '冰箱', 'icon': '❄️', 'category': 'appliance', 'power_consumption': 150,
+        'controls': {
+            'mode': {'type': 'combo', 'label': '模式', 'options': ['智能', '节能', '快速制冷', '假日'], 'default': '智能'}
+        }
+    },
+    'washing_machine': {
+        'name': '洗衣机', 'icon': '👕', 'category': 'appliance', 'power_consumption': 500,
+        'controls': {
+            'mode': {'type': 'combo', 'label': '模式', 'options': ['标准', '快洗', '强力', '轻柔', '脱水'], 'default': '标准'},
+            'temperature': {'type': 'combo', 'label': '水温', 'options': ['冷水', '30°C', '40°C', '60°C'], 'default': '冷水'}
+        }
+    },
+    'dishwasher': {
+        'name': '洗碗机', 'icon': '🍽️', 'category': 'appliance', 'power_consumption': 1200,
+        'controls': {
+            'mode': {'type': 'combo', 'label': '模式', 'options': ['标准', '快速', '强力', '节能'], 'default': '标准'}
+        }
+    },
+    'coffee_maker': {
+        'name': '咖啡机', 'icon': '☕', 'category': 'appliance', 'power_consumption': 800,
+        'controls': {
+            'strength': {'type': 'combo', 'label': '浓度', 'options': ['淡', '中', '浓', '特浓'], 'default': '中'}
+        }
+    },
     
     # 清洁类
-    'robot_vacuum': {'name': '扫地机器人', 'icon': '🤖', 'category': 'cleaning', 'power_consumption': 80},
+    'robot_vacuum': {
+        'name': '扫地机器人', 'icon': '🤖', 'category': 'cleaning', 'power_consumption': 80,
+        'controls': {
+            'mode': {'type': 'combo', 'label': '模式', 'options': ['自动清扫', '定点清扫', '沿边清扫', '回充'], 'default': '自动清扫'}
+        }
+    },
     
     # 窗户类
-    'curtain': {'name': '窗帘', 'icon': '🪟', 'category': 'window', 'power_consumption': 30},
+    'curtain': {
+        'name': '窗帘', 'icon': '🪟', 'category': 'window', 'power_consumption': 30,
+        'controls': {
+            'position': {'type': 'slider', 'label': '开合', 'min': 0, 'max': 100, 'default': 0, 'unit': '%'}
+        }
+    },
     
     # 电源类
-    'smart_socket': {'name': '智能插座', 'icon': '🔌', 'category': 'power', 'power_consumption': 0},
+    'smart_socket': {'name': '智能插座', 'icon': '🔌', 'category': 'power', 'power_consumption': 0, 'controls': {}},
     
     # 水务类
-    'water_valve': {'name': '智能水阀', 'icon': '🚰', 'category': 'water', 'power_consumption': 10}
+    'water_valve': {'name': '智能水阀', 'icon': '🚰', 'category': 'water', 'power_consumption': 10, 'controls': {}}
 }
 
 # 默认房间设备配置
@@ -226,7 +350,7 @@ ROOM_COMMANDS = {
         'commands': ['全部关闭', '全部关掉', '关闭所有', 'turn off all', 'all off', 'switch off all']
     },
     'good_morning': {
-        'commands': ['早上好', '早安', 'good morning', 'morning'],
+        'commands': ['早上好', '早安', 'good morning', 'morning', '起床', '起床了', '该起床了', '睡醒了'],
         'actions': [{'device': 'curtain', 'action': 'open'}, {'device': 'light', 'action': 'on'}]
     },
     'good_night': {

@@ -2,12 +2,13 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QGridLayout, QLabel, QPushButton, QTextEdit,
                              QGroupBox, QFrame, QProgressBar, QSizePolicy, QComboBox,
                              QInputDialog, QLineEdit, QScrollArea, QDialog, QListWidget,
-                             QListWidgetItem, QMessageBox)
+                             QListWidgetItem, QMessageBox, QMenu, QGraphicsDropShadowEffect)
 from PyQt5.QtGui import QFont, QLinearGradient, QRadialGradient, QPalette, QBrush, QPainter, QColor, QPen
 from PyQt5.QtCore import Qt, QTimer, pyqtSlot, QRect, QPointF
 from config.config import DEVICE_NAMES, ROOMS, DEVICE_TYPES, DEFAULT_ROOM_DEVICES
 from modules.device_manager import DeviceManager
 from voice.voiceprint_recognizer import VoiceprintRecognizer
+from gui.device_control_widget import DeviceControlWidget
 import os
 import pygame
 
@@ -662,14 +663,18 @@ class DeviceIcon(QWidget):
         self.animation_timer.stop()
 
 class DeviceWidget(QWidget):
-    def __init__(self, device_id, device_name, sound_manager=None):
+    def __init__(self, device_id, device_name, device_key, state_manager, controls_config=None, sound_manager=None, parent_window=None):
         super().__init__()
         self.device_id = device_id
         self.device_name = device_name
+        self.device_key = device_key
+        self.state_manager = state_manager
+        self.controls_config = controls_config if controls_config else {}
         self.sound_manager = sound_manager
+        self.parent_window = parent_window
         
         self.layout = QVBoxLayout()
-        self.layout.setSpacing(15)
+        self.layout.setSpacing(10)
         
         self.icon_widget = DeviceIcon(device_id)
         
@@ -714,14 +719,49 @@ class DeviceWidget(QWidget):
         """)
         self.state_badge.setAlignment(Qt.AlignCenter)
         
+        # 创建控制面板
+        self.control_widget = None
+        if self.controls_config:
+            self.control_widget = DeviceControlWidget(
+                device_key=device_key,
+                device_type=device_id,
+                controls_config=self.controls_config,
+                state_manager=self.state_manager,
+                sound_manager=self.sound_manager
+            )
+            # 初始禁用控制控件
+            self.control_widget.setEnabled(False)
+        
         self.layout.addWidget(self.icon_widget, alignment=Qt.AlignCenter)
         self.layout.addWidget(self.status_label, alignment=Qt.AlignCenter)
         self.layout.addWidget(self.state_badge, alignment=Qt.AlignCenter)
+        
+        # 添加控制面板（如果有）
+        if self.control_widget:
+            self.layout.addWidget(self.control_widget, alignment=Qt.AlignCenter)
+        
         self.layout.addWidget(self.toggle_btn, alignment=Qt.AlignCenter)
         
         self.setLayout(self.layout)
         
+        # 设置卡片样式 - 圆角和阴影
+        self.setStyleSheet("""
+            QWidget {
+                background: rgba(30, 30, 30, 0.85);
+                border-radius: 15px;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+            }
+        """)
+        self.setAutoFillBackground(True)
+        
+        # 添加右键菜单
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.show_context_menu)
+        
         self.state = False
+        
+        # 启用阴影效果
+        self._add_shadow_effect()
     
     def set_state(self, state):
         self.state = state
@@ -755,6 +795,9 @@ class DeviceWidget(QWidget):
                     border-radius: 10px;
                 }
             """)
+            # 启用控制控件
+            if self.control_widget:
+                self.control_widget.setEnabled(True)
             if self.sound_manager:
                 self.sound_manager.play_device_on()
         else:
@@ -785,12 +828,34 @@ class DeviceWidget(QWidget):
                     border-radius: 10px;
                 }
             """)
+            # 禁用控制控件
+            if self.control_widget:
+                self.control_widget.setEnabled(False)
             if self.sound_manager:
                 self.sound_manager.play_device_off()
     
     def on_toggle(self):
         if self.sound_manager:
             self.sound_manager.play_click()
+    
+    def show_context_menu(self, pos):
+        """显示设备右键菜单"""
+        if self.parent_window:
+            self.parent_window.show_device_context_menu(pos, self.device_key)
+    
+    def _add_shadow_effect(self):
+        """添加阴影效果"""
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(20)
+        shadow.setOffset(0, 5)
+        shadow.setColor(QColor(0, 0, 0, 150))
+        self.setGraphicsEffect(shadow)
+    
+    def mousePressEvent(self, event):
+        """鼠标点击事件"""
+        if event.button() == Qt.RightButton:
+            pass
+        super().mousePressEvent(event)
 
 class MainWindow(QMainWindow):
     def __init__(self, state_manager, command_system, voice_recognizer=None, gesture_recognizer=None, logger=None, sound_manager=None):
@@ -1785,16 +1850,32 @@ class MainWindow(QMainWindow):
         for i, device_type in enumerate(room_devices):
             device_key = f"{room_id}_{device_type}"
             
-            # 获取设备名称
+            # 获取设备名称和控件配置
+            device_name = f"{room_name}{device_type}"
+            controls_config = {}
+            
             if device_type in DEVICE_TYPES:
                 device_name = f"{room_name}{DEVICE_TYPES[device_type]['name']}"
+                controls_config = DEVICE_TYPES[device_type].get('controls', {})
             elif self.device_manager:
                 device_info = self.device_manager.get_all_device_types().get(device_type)
-                device_name = f"{room_name}{device_info.get('name', device_type)}" if device_info else f"{room_name}{device_type}"
-            else:
-                device_name = f"{room_name}{device_type}"
+                if device_info:
+                    device_name = f"{room_name}{device_info.get('name', device_type)}"
+                    controls_config = device_info.get('controls', {})
             
-            widget = DeviceWidget(device_type, device_name, self.sound_manager)
+            # 初始化设备属性默认值
+            if controls_config:
+                self.state_manager.init_device_properties(device_key, controls_config)
+            
+            widget = DeviceWidget(
+                device_id=device_type,
+                device_name=device_name,
+                device_key=device_key,
+                state_manager=self.state_manager,
+                controls_config=controls_config,
+                sound_manager=self.sound_manager,
+                parent_window=self
+            )
             widget.toggle_btn.clicked.connect(lambda checked, did=device_key: self.on_device_toggle(did))
             self.device_widgets[device_key] = widget
             
@@ -1847,6 +1928,67 @@ class MainWindow(QMainWindow):
                 if self.sound_manager:
                     self.sound_manager.play_device_off()
     
+    def show_room_context_menu(self, pos, room_id):
+        """显示房间右键菜单"""
+        room_info = self.device_manager.get_room_info(room_id)
+        is_custom = room_id in self.device_manager.get_custom_rooms()
+        
+        menu = QMenu()
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #2a2a2a;
+                color: #aaa;
+                border: 1px solid rgba(255,255,255,0.1);
+                border-radius: 5px;
+                padding: 5px;
+            }
+            QMenu::item {
+                padding: 8px 20px;
+                border-radius: 3px;
+            }
+            QMenu::item:selected {
+                background-color: rgba(100,150,255,0.3);
+                color: #6496ff;
+            }
+        """)
+        
+        if is_custom:
+            delete_action = menu.addAction('🗑️ 删除房间')
+            delete_action.triggered.connect(lambda: self.on_delete_room(room_id))
+        
+        menu.exec_(self.room_buttons[room_id].mapToGlobal(pos))
+    
+    def on_delete_room(self, room_id):
+        """删除房间"""
+        reply = QMessageBox.question(
+            self, 
+            '确认删除',
+            f'确定要删除房间 "{self.device_manager.get_room_info(room_id).get("name", room_id)}" 吗？\n\n此操作将同时删除该房间内的所有设备。',
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            success, message = self.device_manager.remove_room(room_id)
+            
+            if success:
+                self.log_text.append(f"<span style='color:#4ad9a0;'>✅ [房间]</span> {message}")
+                if self.sound_manager:
+                    self.sound_manager.play_device_on()
+                
+                # 如果删除的是当前房间，切换到第一个房间
+                if room_id == self.current_room:
+                    all_rooms = list(self.device_manager.get_all_rooms().keys())
+                    if all_rooms:
+                        self.on_room_selected(all_rooms[0])
+                
+                # 更新房间按钮
+                self.update_room_buttons()
+            else:
+                self.log_text.append(f"<span style='color:#ff4a4a;'>❌ [房间]</span> {message}")
+                if self.sound_manager:
+                    self.sound_manager.play_device_off()
+    
     def update_room_buttons(self):
         """更新房间按钮列表"""
         # 清空现有按钮
@@ -1882,6 +2024,11 @@ class MainWindow(QMainWindow):
             btn.setCheckable(True)
             btn.setChecked(room_id == self.current_room)
             btn.clicked.connect(lambda checked, rid=room_id: self.on_room_selected(rid))
+            
+            # 添加右键菜单
+            btn.setContextMenuPolicy(Qt.CustomContextMenu)
+            btn.customContextMenuRequested.connect(lambda pos, rid=room_id: self.show_room_context_menu(pos, rid))
+            
             self.room_buttons[room_id] = btn
             self.room_layout.addWidget(btn)
         
@@ -1934,6 +2081,62 @@ class MainWindow(QMainWindow):
                         if self.sound_manager:
                             self.sound_manager.play_device_off()
                     break
+    
+    def show_device_context_menu(self, pos, device_key):
+        """显示设备右键菜单"""
+        menu = QMenu()
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #2a2a2a;
+                color: #aaa;
+                border: 1px solid rgba(255,255,255,0.1);
+                border-radius: 5px;
+                padding: 5px;
+            }
+            QMenu::item {
+                padding: 8px 20px;
+                border-radius: 3px;
+            }
+            QMenu::item:selected {
+                background-color: rgba(100,150,255,0.3);
+                color: #6496ff;
+            }
+        """)
+        
+        delete_action = menu.addAction('🗑️ 删除设备')
+        delete_action.triggered.connect(lambda: self.on_delete_device(device_key))
+        
+        menu.exec_(self.mapToGlobal(pos))
+    
+    def on_delete_device(self, device_key):
+        """删除设备"""
+        if '_' in device_key:
+            room_id, device_type = device_key.split('_', 1)
+            room_name = self.device_manager.get_room_info(room_id).get('name', room_id)
+            device_info = self.device_manager.get_device_info(device_key)
+            device_name = device_info['device_name'] if device_info else device_type
+            
+            reply = QMessageBox.question(
+                self, 
+                '确认删除',
+                f'确定要从 {room_name} 删除 {device_name} 吗？',
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            
+            if reply == QMessageBox.Yes:
+                success, message = self.device_manager.remove_device_from_room(room_id, device_type)
+                
+                if success:
+                    self.log_text.append(f"<span style='color:#4ad9a0;'>✅ [设备]</span> {message}")
+                    if self.sound_manager:
+                        self.sound_manager.play_device_on()
+                    # 刷新设备列表
+                    self.load_room_devices(self.current_room)
+                else:
+                    self.log_text.append(f"<span style='color:#ff4a4a;'>❌ [设备]</span> {message}")
+                    if self.sound_manager:
+                        self.sound_manager.play_device_off()
     
     def on_manage_voiceprint(self):
         """打开声纹管理对话框"""
