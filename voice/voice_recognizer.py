@@ -54,6 +54,8 @@ class VoiceRecognizer(QObject):
         self._current_dev_pid = LANGUAGE_MODELS['mandarin']['dev_pid']
         
         self.smart_assistant = SmartAssistant(logger)
+        # 连接AI指令信号
+        self.smart_assistant.command_ready.connect(self._execute_ai_command)
         
         self._wake_stream = None
         self._wake_listener_active = False
@@ -72,6 +74,61 @@ class VoiceRecognizer(QObject):
             self.logger.info("麦克风初始化成功")
         except Exception as e:
             self.logger.error(f"麦克风初始化失败: {str(e)}")
+    
+    def _execute_ai_command(self, command_text):
+        """执行AI解析出的指令"""
+        self.logger.info(f"执行AI指令: {command_text}")
+        
+        # 解析指令格式："打开xx,关闭xx"
+        commands = command_text.split(',')
+        
+        for cmd in commands:
+            cmd = cmd.strip()
+            if not cmd:
+                continue
+            
+            # 匹配"打开xx"或"关闭xx"
+            if cmd.startswith('打开'):
+                device_name = cmd[2:].strip()
+                self._execute_device_command(device_name, 'on')
+            elif cmd.startswith('关闭'):
+                device_name = cmd[2:].strip()
+                self._execute_device_command(device_name, 'off')
+    
+    def _execute_device_command(self, device_name, action):
+        """根据设备名称执行命令"""
+        # 查找对应的设备类型
+        from config.config import DEVICE_TYPES, ROOMS, DEFAULT_ROOM_DEVICES
+        
+        device_type = None
+        for dev_type, dev_info in DEVICE_TYPES.items():
+            if dev_info.get('name') == device_name:
+                device_type = dev_type
+                break
+        
+        if device_type:
+            # 在当前房间查找该设备
+            current_room = self.smart_assistant.current_room_id
+            
+            # 检查当前房间是否有该设备
+            has_device = False
+            if current_room in DEFAULT_ROOM_DEVICES:
+                has_device = device_type in DEFAULT_ROOM_DEVICES[current_room]
+            
+            # 如果当前房间没有，尝试所有房间
+            if has_device:
+                self.logger.info(f"在当前房间执行: {action} {device_name}")
+                success, msg = self.command_system.execute_command(device_type, action, current_room)
+            else:
+                self.logger.info(f"在所有房间执行: {action} {device_name}")
+                success, msg = self.command_system.execute_command(device_type, action, None)
+            
+            if success:
+                self.logger.info(f"命令执行成功: {msg}")
+            else:
+                self.logger.warning(f"命令执行失败: {msg}")
+        else:
+            self.logger.warning(f"未找到设备: {device_name}")
     
     def get_language_list(self):
         return LANGUAGE_MODELS

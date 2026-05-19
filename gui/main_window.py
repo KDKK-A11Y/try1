@@ -1908,6 +1908,10 @@ class MainWindow(QMainWindow):
         if self.command_system:
             self.command_system.set_current_room(room_id)
         
+        # 更新智能助手的当前房间（用于AI对话）
+        if self.voice_recognizer and self.voice_recognizer.smart_assistant:
+            self.voice_recognizer.smart_assistant.set_current_room(room_id)
+        
         self.load_room_devices(room_id)
     
     def on_add_room(self):

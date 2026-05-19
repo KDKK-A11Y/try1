@@ -5,9 +5,10 @@ import base64
 import os
 import uuid
 import threading
+import re
 from datetime import datetime
-from config.config import ERNIE_SPEECH_CONFIG, WEATHER_CONFIG, WAKE_WORDS, SCENE_RULES, DEVICE_COMMANDS, BAIDU_ASR_CONFIG, DEEPSEEK_CONFIG
-from config.prompt_config import SYSTEM_PROMPT, INITIAL_QUESTIONS, SCENE_PROMPTS, EMOTION_RESPONSES, WEATHER_ACTIONS
+from config.config import ERNIE_SPEECH_CONFIG, WEATHER_CONFIG, WAKE_WORDS, SCENE_RULES, DEVICE_COMMANDS, BAIDU_ASR_CONFIG, DEEPSEEK_CONFIG, ROOMS, DEVICE_TYPES, DEFAULT_ROOM_DEVICES
+from config.prompt_config import SYSTEM_PROMPT, INITIAL_QUESTIONS, SCENE_PROMPTS, EMOTION_RESPONSES, WEATHER_ACTIONS, CONTEXT_TEMPLATE, DEVICE_LIST_TEMPLATE
 from modules.deepseek_client import DeepSeekClient
 from PyQt5.QtCore import QObject, pyqtSignal
 
@@ -16,6 +17,7 @@ class SmartAssistant(QObject):
     weather_updated = pyqtSignal(dict)
     intent_detected = pyqtSignal(str, dict)
     speak_ready = pyqtSignal(str)
+    command_ready = pyqtSignal(str)  # 新信号：传递解析出的指令
     
     def __init__(self, logger):
         super().__init__()
@@ -29,6 +31,19 @@ class SmartAssistant(QObject):
         self._deepseek_client = None
         self._use_deepseek = False
         self._init_deepseek()
+        
+        # 当前房间信息
+        self.current_room_id = 'living'
+        self.device_manager = None
+    
+    def set_device_manager(self, device_manager):
+        """设置设备管理器"""
+        self.device_manager = device_manager
+    
+    def set_current_room(self, room_id):
+        """设置当前房间"""
+        self.current_room_id = room_id
+        self.logger.info(f"当前房间已更新: {room_id} -> {ROOMS.get(room_id, {}).get('name', room_id)}")
         
     def _get_access_token(self):
         now = time.time()
@@ -300,21 +315,155 @@ class SmartAssistant(QObject):
         else:
             self.logger.info("已禁用DeepSeek对话")
     
+    def _build_context(self):
+        """构建当前上下文信息"""
+        # 获取房间名称
+        room_info = ROOMS.get(self.current_room_id, {})
+        room_name = room_info.get('name', self.current_room_id)
+        
+        # 获取房间设备列表
+        room_devices = self._get_room_devices(self.current_room_id)
+        
+        # 获取当前时间
+        current_time = datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')
+        
+        # 获取天气信息
+        temp = self.current_weather.get('temperature', '--')
+        weather = self.current_weather.get('weather', '未知')
+        
+        # 构建上下文字符串
+        context = CONTEXT_TEMPLATE.format(
+            room_name=room_name,
+            room_devices=room_devices,
+            current_time=current_time,
+            temperature=temp,
+            weather=weather
+        )
+        
+        return context
+    
+    def _get_room_devices(self, room_id):
+        """获取房间设备列表字符串"""
+        devices = []
+        
+        # 从默认配置获取
+        if room_id in DEFAULT_ROOM_DEVICES:
+            for device_type in DEFAULT_ROOM_DEVICES[room_id]:
+                device_info = DEVICE_TYPES.get(device_type, {})
+                device_name = device_info.get('name', device_type)
+                devices.append(f"- {device_name}")
+        
+        # 从设备管理器获取自定义设备
+        if self.device_manager:
+            custom_devices = self.device_manager.get_room_devices(room_id)
+            for device_type in custom_devices:
+                device_info = self.device_manager.get_device_info(f"{room_id}_{device_type}")
+                if device_info:
+                    device_name = device_info.get('device_name', device_type)
+                    if f"- {device_name}" not in devices:
+                        devices.append(f"- {device_name}")
+        
+        if not devices:
+            return "暂无设备"
+        
+        return '\n'.join(devices)
+    
+    def _build_device_list(self):
+        """构建所有可用设备列表字符串"""
+        device_names = []
+        for device_type, device_info in DEVICE_TYPES.items():
+            device_names.append(f"- {device_info.get('name', device_type)}")
+        return '\n'.join(device_names)
+    
+    def _build_full_prompt(self):
+        """构建完整的系统提示词"""
+        context = self._build_context()
+        device_list = self._build_device_list()
+        
+        full_prompt = SYSTEM_PROMPT.format(
+            context=context,
+            device_list=device_list
+        )
+        
+        return full_prompt
+    
     def chat_with_deepseek(self, message):
-        """与DeepSeek对话"""
+        """与DeepSeek对话（带动态上下文）"""
         if not self._use_deepseek or not self._deepseek_client:
             self.logger.warning("DeepSeek未启用或未初始化")
             return None
         
+        # 更新系统提示词（包含当前上下文）
+        full_prompt = self._build_full_prompt()
+        self._deepseek_client.set_system_prompt(full_prompt)
+        
         self.logger.info(f"正在与DeepSeek对话: {message}")
+        self.logger.debug(f"上下文信息已更新")
+        
         return self._deepseek_client.chat(message)
     
-    def _on_deepseek_response(self, response):
-        """DeepSeek响应回调"""
-        self.logger.info(f"DeepSeek响应: {response[:50]}...")
+    def _parse_response(self, response):
+        """解析DeepSeek响应，分离回复内容和指令"""
+        if '|' in response:
+            parts = response.split('|', 1)
+            reply_text = parts[0].strip()
+            command_text = parts[1].strip() if len(parts) > 1 else ''
+        else:
+            # 如果没有分隔符，全部作为回复内容
+            reply_text = response.strip()
+            command_text = ''
         
-        if self.tts_enabled:
-            self.speak(response)
+        return reply_text, command_text
+    
+    def _parse_commands(self, command_text):
+        """解析指令文本，提取设备控制指令"""
+        commands = []
+        
+        if not command_text or command_text == '无':
+            return commands
+        
+        # 按逗号分割指令
+        command_parts = command_text.split(',')
+        
+        # 正则匹配：打开xx 或 关闭xx
+        pattern = r'(打开|关闭)([\u4e00-\u9fa5]+)'
+        
+        for part in command_parts:
+            part = part.strip()
+            if not part:
+                continue
+            
+            match = re.match(pattern, part)
+            if match:
+                action = match.group(1)  # '打开' 或 '关闭'
+                device_name = match.group(2)  # 设备名称
+                commands.append({
+                    'action': action,
+                    'device_name': device_name
+                })
+                self.logger.info(f"解析到指令: {action} {device_name}")
+            else:
+                self.logger.warning(f"无法解析指令: {part}")
+        
+        return commands
+    
+    def _on_deepseek_response(self, response):
+        """DeepSeek响应回调（包含指令解析）"""
+        self.logger.info(f"DeepSeek响应: {response[:100]}...")
+        
+        # 解析响应
+        reply_text, command_text = self._parse_response(response)
+        
+        # 处理回复内容（语音合成）
+        if reply_text and self.tts_enabled:
+            self.speak(reply_text)
+        
+        # 解析并执行指令
+        commands = self._parse_commands(command_text)
+        if commands:
+            # 将指令发送给命令系统执行
+            self.command_ready.emit(command_text)
+            self.logger.info(f"已发送指令: {command_text}")
     
     def _on_deepseek_error(self, error_msg):
         """DeepSeek错误回调"""
